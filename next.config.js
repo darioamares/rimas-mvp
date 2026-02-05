@@ -1,22 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
-  // Ignoramos errores para que nada detenga el despliegue del MVP
+  // 1. ESTO ES CLAVE: Desactiva mapas de fuente para ahorrar mucha RAM
+  productionBrowserSourceMaps: false, 
   eslint: {
+    // 2. Ignora cualquier queja de estilo
     ignoreDuringBuilds: true,
   },
   typescript: {
+    // 3. Ignora errores de tipos
     ignoreBuildErrors: true,
   },
   images: {
+    // 4. No pierdas tiempo optimizando imágenes
     unoptimized: true,
   },
-  // --- CONFIGURACIÓN DE ALTA EFICIENCIA ---
-  // Volvemos a activar SWC para evitar el aviso y ganar velocidad
-  swcMinify: true, 
   experimental: {
-    // Esto evita que Vercel se "maree" procesando miles de iconos de lucide-react
-    optimizePackageImports: ['lucide-react'],
+    // 5. Fuerza bruta: usa menos procesos paralelos para no explotar la memoria
+    webpackBuildWorker: false,
   },
 }
 
