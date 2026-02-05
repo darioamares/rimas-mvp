@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { useUserAuth } from '../context/AuthContext'; 
-import { useRouter } from 'next/navigation'; 
+// ELIMINADO: import { useUserAuth } ... (Ya no usamos autenticación)
+// ELIMINADO: import { useRouter } ... (Ya no redirigimos)
 import { Palette, Shield, Send, Trash2, Cpu, ChevronLeft, ChevronRight, Highlighter, Eraser, Sparkles, Type, Minus, Plus, X, GripVertical, Move, Power, ZapOff, Bot, Loader2, Sword, Edit2, Zap as ZapIcon, Trophy, Music, Sparkle, Mic, Square, Play, Pause, Target, Dna, MicOff, Disc, Volume2, Settings, Upload, BarChart2, BrainCircuit } from 'lucide-react';
 import { db } from '../lib/firebase'; 
 import { collection, addDoc } from "firebase/firestore";
@@ -25,7 +25,7 @@ const COLORS = [
 
 const CONCEPTS = ["EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", "LA ÚLTIMA CARTA", "SUEÑO MECÁNICO", "SOMBRAS DE NEÓN", "CATEDRAL DE DATOS", "EL CÓDIGO DE LA VIDA", "CIUDADES INVISIBLES", "EL GRITO DEL VACÍO", "DESTINO CODIFICADO", "POLVO DE ESTRELLAS MUERTAS", "SANGRE NEGRA", "EL PRECIO DE LA VERDAD", "FANTASMAS EN LA RED", "ALGORITMOS DEL MIEDO", "DIAMANTES EN EL BARRO", "CORAZONES DE SILICIO", "EL GUARDIÁN DEL UMBRAL", "CENIZAS DEL MAÑANA", "EL ÚLTIMO PULSO", "PIXELES ROTOS", "EL FIN DE LA HISTORIA"];
 
-// --- HELPERS (Matemática pura, sin Hooks) ---
+// --- HELPERS ---
 const formatTime = (seconds) => {
   if (typeof seconds !== 'number' || isNaN(seconds)) return "0:00";
   const mins = Math.floor(seconds / 60);
@@ -47,7 +47,7 @@ const countTotalSyllablesFromRaw = (text) => {
   return words.reduce((acc, w) => acc + getSyllablesCount(w), 0);
 };
 
-// --- SUB-COMPONENTES (Visuales, sin Hooks complejos) ---
+// --- SUB-COMPONENTES ---
 const PowerBar = ({ content, side }) => {
   const textVal = typeof content === 'string' ? content : "";
   const matches = textVal.match(/<span/g);
@@ -110,18 +110,14 @@ const EditableBubble = memo(({ content, rowIndex, side, onUpdate, fontSize, isOf
 });
 
 // ==========================================
-// 🔥 COMPONENTE PRINCIPAL (La Matriz)
+// 🔥 APP PRINCIPAL (SIN LOGIN)
 // ==========================================
 export default function Home() {
-  // 1. HOOKS PRIMARIOS (Siempre arriba)
-  const { user, loading, logout } = useUserAuth(); 
-  const router = useRouter();
-
-  // 2. ESTADOS (useState - Siempre arriba)
+  // A) HOOKS - SIN AUTH
   const [battleRows, setBattleRows] = useState([]);
   const [currentTheme, setCurrentTheme] = useState("");
   const [intensity, setIntensity] = useState(0); 
-  const [p1Name, setP1Name] = useState("DARÍO AMARES");
+  const [p1Name, setP1Name] = useState("DARÍO AMARES"); // Nombre fijo
   const [p2Name, setP2Name] = useState("DEMIURGO");
   const [activeSide, setActiveSide] = useState('left');
   const [fontSize, setFontSize] = useState(15);
@@ -138,9 +134,7 @@ export default function Home() {
   const [trainingList, setTrainingList] = useState(new Set(INITIAL_STOPWORDS));
   const [newTrainingWord, setNewTrainingWord] = useState("");
   const [showTrainingPanel, setShowTrainingPanel] = useState(false);
-  const [showProfile, setShowProfile] = useState(false); 
 
-  // 3. REFERENCIAS (useRef - Siempre arriba)
   const beatAudioRef = useRef(null);
   const fileInputRef = useRef(null);
   const editorRef = useRef(null);
@@ -154,16 +148,7 @@ export default function Home() {
   const isRecordingRef = useRef(false);
   const accumulatedSpeechRef = useRef("");
 
-  // 4. EFECTOS (useEffect - Siempre arriba)
-  useEffect(() => {
-    if (!loading && !user) {
-        router.push('/login');
-    } else if (user && user.displayName) {
-        setP1Name(user.displayName.toUpperCase());
-    }
-  }, [user, loading, router]);
-
-  // 5. CALLBACKS (Motores Lógicos - Siempre arriba)
+  // B) CALLBACKS
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -221,7 +206,7 @@ export default function Home() {
     }).join('<br>');
   }, [getVocalicSignature]);
 
-  // 6. HANDLERS (Funciones de evento)
+  // C) HANDLERS
   const handleEditorInput = (e) => {
     if (!e.currentTarget) return;
     const text = e.currentTarget.innerText;
@@ -340,7 +325,8 @@ export default function Home() {
       return [...next, { id: Date.now() + Math.random(), left: activeSide === 'left' ? bar : null, right: activeSide === 'right' ? bar : null }];
     });
 
-    try { await addDoc(collection(db, "rimas_session"), bar); console.log("Rima guardada en MVP ☁️"); } catch (e) { console.error("Error guardando:", e); }
+    // Intenta guardar, pero si falla (por permisos o falta de auth), no rompe la app
+    try { await addDoc(collection(db, "rimas_session"), bar); console.log("Rima guardada"); } catch (e) { console.warn("Modo Offline: No se guardó en nube", e); }
     
     editorRef.current.innerHTML = ''; 
     setSyllableCount(0); 
@@ -467,11 +453,6 @@ export default function Home() {
     setIntensity(Math.min((Number(totalCount) || 0) * 4, 95));
   }, [battleRows]);
 
-  // 🔴 VERIFICACIÓN FINAL: PANTALLA DE CARGA SIEMPRE AL FINAL 🔴
-  // Si movemos esto arriba de los Hooks (useCallback, useEffect, etc.), React explota.
-  // Aquí es seguro porque React ya "leyó" todos los hooks necesarios.
-  if (loading || !user) return <div className="h-screen w-full bg-[#0a0a0c] flex items-center justify-center text-cyan-400 font-black tracking-[0.5em] animate-pulse">CARGANDO MATRIZ...</div>;
-
   return (
     <div className="h-screen bg-[#0a0a0c] text-white font-sans flex flex-col overflow-hidden relative">
       <audio ref={beatAudioRef} crossOrigin="anonymous" onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)} onLoadedMetadata={(e) => { if(e.target.duration) setDuration(e.target.duration); }} loop />
@@ -479,15 +460,10 @@ export default function Home() {
 
       <div className="flex-none border-b border-white/5 p-4 bg-black/90 backdrop-blur-xl z-30 grid grid-cols-[1fr_auto_1fr] items-center shadow-2xl">
         <div className="flex justify-start pr-4">
-            <div className="max-w-[200px] w-full flex flex-col group cursor-pointer" onClick={() => setShowProfile(true)}>
-                <div className="flex items-center gap-2">
-                    <input value={p1Name} readOnly className="bg-transparent border-none outline-none text-lg font-black text-cyan-400 uppercase tracking-widest w-full cursor-pointer pointer-events-none" />
-                    <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" title="Ver Perfil RPG"></div>
-                </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-[8px] text-white/40 font-bold tracking-widest">VER PERFIL RPG</span>
-                    <button onClick={(e) => { e.stopPropagation(); logout(); }} className="text-[8px] text-red-500 hover:text-red-400 uppercase font-bold tracking-widest hover:underline">SALIR</button>
-                </div>
+            {/* SIN LOGIN - MODO LIBRE */}
+            <div className="max-w-[200px] w-full flex flex-col">
+                <input value={p1Name} onChange={e => setP1Name(e.target.value.toUpperCase())} className="bg-transparent border-none outline-none text-lg font-black text-cyan-400 uppercase tracking-widest w-full" />
+                <span className="text-[8px] text-white/40 uppercase font-bold tracking-widest mt-1">MODO LIBRE</span>
             </div>
         </div>
         
@@ -563,12 +539,6 @@ export default function Home() {
            <div className="flex flex-col gap-3 pb-8 flex-none"><button type="button" onClick={removeHighlightSelection} className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors" title="Borrar Resaltado"><Eraser size={14} /></button><button type="button" onClick={() => setBattleRows(prev => prev.map(r => ({...r, left: r.left?{...r.left, isDimmed:true}:null, right: r.right?{...r.right, isDimmed:true}:null})))} className="w-8 h-8 rounded bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-500 shadow-lg" title="Apagar todo"><Power size={14} /></button><button type="button" onClick={() => setBattleRows([])} className="w-8 h-8 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors" title="Limpiar Canvas"><Trash2 size={14} /></button></div>
         </div>
       </div>
-      
-      {/* SECCIÓN DE PERFIL COMENTADA POR SEGURIDAD SI NO TIENES EL COMPONENTE */}
-      {/* {showProfile && user && (
-        <UserProfile user={user} onClose={() => setShowProfile(false)} />
-      )}
-      */}
 
       <style>{`
         @keyframes lightning-elegant { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 10px #FFFF00); } 50% { opacity: 0.4; filter: drop-shadow(0 0 3px #FFFF00); } }
