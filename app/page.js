@@ -210,7 +210,7 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
-  // --- MOTOR FONÉTICO Y CALLBACKS (Movidos ANTES del return condicional) ---
+  // --- MOTOR FONÉTICO (Callbacks) ---
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -263,9 +263,9 @@ export default function Home() {
       return line.split(/(\s+)/).map(token => {
         const clean = token.replace(/[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ]/g, '').toLowerCase();
         const sig = getVocalicSignature(clean);
-        const color = activeColors[sig];
-        return (color) 
-          ? `<span style="background-color: ${color.hex}; color: ${color.text}; padding: 2px 0px; border-radius: 2px; font-weight: bold;">${token}</span>` 
+        const activeColor = activeColors[sig];
+        return (activeColor) 
+          ? `<span style="background-color: ${activeColor.hex}; color: ${activeColor.text}; padding: 2px 0px; border-radius: 2px; font-weight: bold;">${token}</span>` 
           : token;
       }).join('');
     }).join('<br>');
@@ -549,7 +549,9 @@ export default function Home() {
     setIntensity(Math.min((Number(totalCount) || 0) * 4, 95));
   }, [battleRows]);
 
-  // --- RETURN CONDICIONAL (MOVIDO AL FINAL PARA EVITAR ERROR #310) ---
+  // ============================================
+  // 🔥 FIX CRÍTICO: PANTALLA DE CARGA AL FINAL
+  // ============================================
   if (loading || !user) return <div className="h-screen w-full bg-[#0a0a0c] flex items-center justify-center text-cyan-400 font-black tracking-[0.5em] animate-pulse">CARGANDO MATRIZ...</div>;
 
   return (
