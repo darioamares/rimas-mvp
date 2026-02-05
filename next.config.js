@@ -1,21 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  // Ignoramos errores para que nada detenga el despliegue del MVP
   eslint: {
-    // Ignora errores de estilo durante el despliegue
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // Ignora errores de tipo durante el despliegue
     ignoreBuildErrors: true,
   },
-  // Desactivamos la optimización de imágenes para que el build no se cuelgue
   images: {
     unoptimized: true,
   },
-  // Desactivamos el minificador SWC si el build se queda "congelado"
-  // Esto hace que el proceso sea más simple y directo
-  swcMinify: false,
+  // --- CONFIGURACIÓN DE ALTA EFICIENCIA ---
+  // Volvemos a activar SWC para evitar el aviso y ganar velocidad
+  swcMinify: true, 
+  experimental: {
+    // Esto evita que Vercel se "maree" procesando miles de iconos de lucide-react
+    optimizePackageImports: ['lucide-react'],
+  },
 }
 
 module.exports = nextConfig
