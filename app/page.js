@@ -1,3 +1,5 @@
+import UserProfile from '../components/UserProfile';
+
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
@@ -159,6 +161,7 @@ const EditableBubble = memo(({ content, rowIndex, side, onUpdate, fontSize, isOf
 // --- App Principal ---
 
 export default function Home() {
+  const [showProfile, setShowProfile] = useState(false);
   // --- AUTH HOOKS (NUEVO) ---
   const { user, loading, logout } = useUserAuth(); 
   const router = useRouter();
@@ -687,6 +690,9 @@ export default function Home() {
         .custom-range::-webkit-slider-thumb:hover { transform: scale(1.3); }
         .bg-rainbow-glow { background: linear-gradient(90deg, #ff0000, #ff00ff, #00ffff, #ffff00, #ff0000); background-size: 400% 400%; }
       `}</style>
+                  {showProfile && user && (
+    <UserProfile user={user} onClose={() => setShowProfile(false)} />
+)}
     </div>
   );
 };
