@@ -2,7 +2,22 @@
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Palette, Shield, Send, Trash2, Cpu, ChevronLeft, ChevronRight, Highlighter, Eraser, Sparkles, Type, Minus, Plus, X, GripVertical, Move, Power, ZapOff, Bot, Loader2, Sword, Edit2, Zap as ZapIcon, Trophy, Music, Sparkle, Mic, Square, Play, Pause, Target, Dna, MicOff, Disc, Volume2, Settings, Upload, BarChart2, BrainCircuit } from 'lucide-react';
+import { saveBattle, getBattles } from '../lib/localStore';
 
+// Añadir botón "Guardar Batalla"
+const saveBattleLocal = () => {
+  saveBattle({
+    p1Name,
+    p2Name,
+    theme: currentTheme,
+    rows: battleRows,
+    stats: {
+      p1Verses: battleRows.filter(r => r.left).length,
+      p2Verses: battleRows.filter(r => r.right).length
+    }
+  });
+  alert('✅ Batalla guardada localmente');
+};
 // --- CONFIGURACIÓN LÍRICA ---
 const INITIAL_STOPWORDS = [
   'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 
