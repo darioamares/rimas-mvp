@@ -1,4 +1,5 @@
 import './globals.css'
+import { AuthContextProvider } from '../context/AuthContext';
 
 export const metadata = {
   title: 'Rimas MVP - Master Station',
@@ -8,7 +9,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <AuthContextProvider>
+          {children}
+        </AuthContextProvider>
+      </body>
     </html>
   )
 }
