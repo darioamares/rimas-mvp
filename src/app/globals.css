@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 10, 10, 12;
+  --background-end-rgb: 0, 0, 0;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+  overflow: hidden;
+}
+
+@keyframes lightning-elegant { 
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 10px #FFFF00); } 
+  50% { opacity: 0.4; filter: drop-shadow(0 0 3px #FFFF00); } 
+}
+.animate-lightning-elegant { animation: lightning-elegant 2.5s ease-in-out infinite; }
+
+@keyframes mvp-slow-glow { 
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 12px #00FFFF); } 
+  50% { opacity: 0.8; filter: drop-shadow(0 0 5px #00FFFF); } 
+}
+.animate-mvp-slow-glow { animation: mvp-slow-glow 8s ease-in-out infinite; }
+
+.bg-rainbow-glow { background: linear-gradient(90deg, #ff0000, #ff00ff, #00ffff, #ffff00, #ff0000); background-size: 400% 400%; }
+@keyframes rainbow { 0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% } }
+.animate-rainbow { animation: rainbow 5s ease infinite; }
+
+/* Utilidades de Scroll y Range */
+.custom-scrollbar::-webkit-scrollbar { width: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.custom-range::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #00FFFF; box-shadow: 0 0 10px #00FFFF; cursor: pointer; border: 2px solid white; transition: all 0.2s; }
+.custom-range::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+[contenteditable]:empty:before { content: attr(data-placeholder); color: #4b5563; font-style: italic; }
