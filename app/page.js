@@ -7,14 +7,8 @@ import { Palette, Shield, Send, Trash2, Cpu, ChevronLeft, ChevronRight, Highligh
 import { db } from '../lib/firebase'; 
 import { collection, addDoc } from "firebase/firestore";
 
-// --- CONFIGURACIÓN LÍRICA ---
-const INITIAL_STOPWORDS = [
-  'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 
-  'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 
-  'ha', 'he', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me', 'se', 'lo', 'le', 
-  'nos', 'os', 'les', 'soy', 'eres', 'este', 'esta', 'estos', 'estas', 'como',
-  'tan', 'muy', 'pero', 'mas', 'más', 'sus', 'mis', 'tus', 'donde', 'cuando', 'porque'
-];
+// --- CONSTANTES ---
+const INITIAL_STOPWORDS = ['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 'ha', 'he', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me', 'se', 'lo', 'le', 'nos', 'os', 'les', 'soy', 'eres', 'este', 'esta', 'estos', 'estas', 'como', 'tan', 'muy', 'pero', 'mas', 'más', 'sus', 'mis', 'tus', 'donde', 'cuando', 'porque'];
 
 const COLORS = [
   { id: 'cyan', hex: '#00FFFF', label: 'Cian Neón', text: 'black' },
@@ -29,15 +23,9 @@ const COLORS = [
   { id: 'lime', hex: '#AFFF00', label: 'Verde Lima', text: 'black' },
 ];
 
-const CONCEPTS = [
-  "EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", 
-  "LA ÚLTIMA CARTA", "SUEÑO MECÁNICO", "SOMBRAS DE NEÓN", "CATEDRAL DE DATOS", "EL CÓDIGO DE LA VIDA", 
-  "CIUDADES INVISIBLES", "EL GRITO DEL VACÍO", "DESTINO CODIFICADO", "POLVO DE ESTRELLAS MUERTAS", "SANGRE NEGRA", 
-  "EL PRECIO DE LA VERDAD", "FANTASMAS EN LA RED", "ALGORITMOS DEL MIEDO", "DIAMANTES EN EL BARRO", "CORAZONES DE SILICIO", 
-  "EL GUARDIÁN DEL UMBRAL", "CENIZAS DEL MAÑANA", "EL ÚLTIMO PULSO", "PIXELES ROTOS", "EL FIN DE LA HISTORIA"
-];
+const CONCEPTS = ["EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", "LA ÚLTIMA CARTA", "SUEÑO MECÁNICO", "SOMBRAS DE NEÓN", "CATEDRAL DE DATOS", "EL CÓDIGO DE LA VIDA", "CIUDADES INVISIBLES", "EL GRITO DEL VACÍO", "DESTINO CODIFICADO", "POLVO DE ESTRELLAS MUERTAS", "SANGRE NEGRA", "EL PRECIO DE LA VERDAD", "FANTASMAS EN LA RED", "ALGORITMOS DEL MIEDO", "DIAMANTES EN EL BARRO", "CORAZONES DE SILICIO", "EL GUARDIÁN DEL UMBRAL", "CENIZAS DEL MAÑANA", "EL ÚLTIMO PULSO", "PIXELES ROTOS", "EL FIN DE LA HISTORIA"];
 
-// --- HELPERS GLOBALES ---
+// --- HELPERS (Matemática pura, sin Hooks) ---
 const formatTime = (seconds) => {
   if (typeof seconds !== 'number' || isNaN(seconds)) return "0:00";
   const mins = Math.floor(seconds / 60);
@@ -59,39 +47,14 @@ const countTotalSyllablesFromRaw = (text) => {
   return words.reduce((acc, w) => acc + getSyllablesCount(w), 0);
 };
 
-// --- COMPONENTES AUXILIARES ---
-
-const PlayerStats = ({ side, rows }) => {
-  const stats = rows.reduce((acc, row) => {
-    const content = row?.[side];
-    if (content && typeof content.text === 'string') {
-      acc.bubbles += 1;
-      acc.verses += (content.text.split('<br>').length || 1);
-      const matches = content.text.match(/<span/g);
-      acc.rhymes += (matches ? matches.length : 0);
-    }
-    return acc;
-  }, { bubbles: 0, verses: 0, rhymes: 0 });
-
-  return (
-    <div className={`flex gap-3 text-[9px] font-black tracking-tighter uppercase mt-1 ${side === 'left' ? 'text-cyan-400/60' : 'text-red-500/60 justify-end'}`}>
-      <span>{String(stats.bubbles)} BUB</span>
-      <span>{String(stats.verses)} VER</span>
-      <span>{String(stats.rhymes)} RHY</span>
-    </div>
-  );
-};
-
+// --- SUB-COMPONENTES (Visuales, sin Hooks complejos) ---
 const PowerBar = ({ content, side }) => {
   const textVal = typeof content === 'string' ? content : "";
   const matches = textVal.match(/<span/g);
   const intensityValue = Math.min((matches ? matches.length : 0) * 12, 100);
   return (
     <div className={`w-1.5 flex flex-col justify-end bg-white/5 rounded-full overflow-hidden self-stretch my-2 ${side === 'left' ? 'mr-3' : 'ml-3'}`}>
-      <div 
-        className={`w-full transition-all duration-1000 ease-out bg-gradient-to-t ${side === 'left' ? 'from-cyan-600 to-cyan-300 shadow-[0_0_10px_cyan]' : 'from-rose-600 to-rose-300 shadow-[0_0_10px_red]'}`} 
-        style={{ height: `${intensityValue}%` }} 
-      />
+      <div className={`w-full transition-all duration-1000 ease-out bg-gradient-to-t ${side === 'left' ? 'from-cyan-600 to-cyan-300 shadow-[0_0_10px_cyan]' : 'from-rose-600 to-rose-300 shadow-[0_0_10px_red]'}`} style={{ height: `${intensityValue}%` }} />
     </div>
   );
 };
@@ -99,7 +62,6 @@ const PowerBar = ({ content, side }) => {
 const BubbleAudio = ({ onAudioSave, savedAudio }) => {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorder = useRef(null);
-
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -115,9 +77,7 @@ const BubbleAudio = ({ onAudioSave, savedAudio }) => {
       setIsRecording(true);
     } catch (err) { console.warn("Mic fail", err); }
   };
-
   const stopRecording = () => { if (mediaRecorder.current && isRecording) { mediaRecorder.current.stop(); setIsRecording(false); } };
-
   return (
     <div className="mt-2 flex items-center gap-3">
       {!savedAudio ? (
@@ -142,28 +102,22 @@ const EditableBubble = memo(({ content, rowIndex, side, onUpdate, fontSize, isOf
       if (bubbleRef.current.innerHTML !== safeText) bubbleRef.current.innerHTML = safeText;
     }
   }, [content]);
-
   return (
     <div className={`transition-all duration-700 ease-out ${isOffset ? 'translate-y-8 opacity-90' : 'translate-y-0'}`}>
-      <div 
-        ref={bubbleRef} contentEditable suppressContentEditableWarning data-bubble-type="rimas-mvp" data-row-index={rowIndex} data-side={side}
-        onInput={(e) => onUpdate(rowIndex, side, e.currentTarget.innerHTML)}
-        className={`p-5 border-l-4 ${side === 'left' ? 'border-cyan-500' : 'border-r-4 border-l-0 border-rose-500 text-right'} bg-white text-slate-900 rounded-lg outline-none transition-all font-semibold italic whitespace-pre-wrap break-words leading-relaxed shadow-2xl relative`}
-        style={{ fontSize: `${fontSize}px` }}
-        dangerouslySetInnerHTML={{ __html: typeof content === 'string' ? content : "" }}
-      />
+      <div ref={bubbleRef} contentEditable suppressContentEditableWarning data-bubble-type="rimas-mvp" data-row-index={rowIndex} data-side={side} onInput={(e) => onUpdate(rowIndex, side, e.currentTarget.innerHTML)} className={`p-5 border-l-4 ${side === 'left' ? 'border-cyan-500' : 'border-r-4 border-l-0 border-rose-500 text-right'} bg-white text-slate-900 rounded-lg outline-none transition-all font-semibold italic whitespace-pre-wrap break-words leading-relaxed shadow-2xl relative`} style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: typeof content === 'string' ? content : "" }} />
     </div>
   );
 });
 
-// --- App Principal ---
-
+// ==========================================
+// 🔥 COMPONENTE PRINCIPAL (La Matriz)
+// ==========================================
 export default function Home() {
-  // --- AUTH HOOKS ---
+  // 1. HOOKS PRIMARIOS (Siempre arriba)
   const { user, loading, logout } = useUserAuth(); 
   const router = useRouter();
 
-  // --- ESTADOS ---
+  // 2. ESTADOS (useState - Siempre arriba)
   const [battleRows, setBattleRows] = useState([]);
   const [currentTheme, setCurrentTheme] = useState("");
   const [intensity, setIntensity] = useState(0); 
@@ -184,8 +138,9 @@ export default function Home() {
   const [trainingList, setTrainingList] = useState(new Set(INITIAL_STOPWORDS));
   const [newTrainingWord, setNewTrainingWord] = useState("");
   const [showTrainingPanel, setShowTrainingPanel] = useState(false);
+  const [showProfile, setShowProfile] = useState(false); 
 
-  // --- REFS ---
+  // 3. REFERENCIAS (useRef - Siempre arriba)
   const beatAudioRef = useRef(null);
   const fileInputRef = useRef(null);
   const editorRef = useRef(null);
@@ -199,7 +154,7 @@ export default function Home() {
   const isRecordingRef = useRef(false);
   const accumulatedSpeechRef = useRef("");
 
-  // --- EFECTO DE PROTECCIÓN Y AUTH ---
+  // 4. EFECTOS (useEffect - Siempre arriba)
   useEffect(() => {
     if (!loading && !user) {
         router.push('/login');
@@ -208,10 +163,7 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
-  // Si está cargando o no hay usuario aun, mostrar pantalla de carga
-  if (loading || !user) return <div className="h-screen w-full bg-[#0a0a0c] flex items-center justify-center text-cyan-400 font-black tracking-[0.5em] animate-pulse">CARGANDO MATRIZ...</div>;
-
-  // --- MOTOR FONÉTICO ---
+  // 5. CALLBACKS (Motores Lógicos - Siempre arriba)
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -240,7 +192,6 @@ export default function Home() {
     const lines = cleanText.split('\n');
     const words = cleanText.split(/[\s,.;:!?¡¿]+/);
     const sigMap = {}, wordsBySig = {};
-    
     words.forEach(w => {
       const low = w.replace(/[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ]/g, '').toLowerCase();
       const sig = getVocalicSignature(low);
@@ -250,7 +201,6 @@ export default function Home() {
         wordsBySig[sig].add(low);
       }
     });
-
     const activeColors = {};
     let colorIdx = 0;
     Object.keys(sigMap).forEach(sig => {
@@ -259,20 +209,19 @@ export default function Home() {
         colorIdx++;
       }
     });
-
     return lines.map(line => {
       return line.split(/(\s+)/).map(token => {
         const clean = token.replace(/[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ]/g, '').toLowerCase();
         const sig = getVocalicSignature(clean);
-        const color = activeColors[sig];
-        return (color) 
-          ? `<span style="background-color: ${color.hex}; color: ${color.text}; padding: 2px 0px; border-radius: 2px; font-weight: bold;">${token}</span>` 
+        const activeColor = activeColors[sig];
+        return (activeColor) 
+          ? `<span style="background-color: ${activeColor.hex}; color: ${activeColor.text}; padding: 2px 0px; border-radius: 2px; font-weight: bold;">${token}</span>` 
           : token;
       }).join('');
     }).join('<br>');
   }, [getVocalicSignature]);
 
-  // --- HANDLERS ---
+  // 6. HANDLERS (Funciones de evento)
   const handleEditorInput = (e) => {
     if (!e.currentTarget) return;
     const text = e.currentTarget.innerText;
@@ -326,9 +275,7 @@ export default function Home() {
   const removeBubble = (rowIndex, side) => {
     setBattleRows(prev => { 
       const next = [...prev]; 
-      if (next[rowIndex]) {
-          next[rowIndex] = { ...next[rowIndex], [side]: null };
-      }
+      if (next[rowIndex]) { next[rowIndex] = { ...next[rowIndex], [side]: null }; }
       return next; 
     });
   };
@@ -376,8 +323,6 @@ export default function Home() {
     if (!rawText.trim()) return;
     
     const sylls = countTotalSyllablesFromRaw(rawText);
-    
-    // Objeto de la barra
     const bar = { 
         text: String(htmlContent), 
         syllables: Number(sylls), 
@@ -395,13 +340,7 @@ export default function Home() {
       return [...next, { id: Date.now() + Math.random(), left: activeSide === 'left' ? bar : null, right: activeSide === 'right' ? bar : null }];
     });
 
-    // GUARDAR EN FIREBASE (En segundo plano)
-    try {
-        await addDoc(collection(db, "rimas_session"), bar);
-        console.log("Rima guardada en la nube MVP ☁️");
-    } catch (e) {
-        console.error("Error guardando:", e);
-    }
+    try { await addDoc(collection(db, "rimas_session"), bar); console.log("Rima guardada en MVP ☁️"); } catch (e) { console.error("Error guardando:", e); }
     
     editorRef.current.innerHTML = ''; 
     setSyllableCount(0); 
@@ -413,28 +352,22 @@ export default function Home() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
-      
       if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtxRef.current.state === 'suspended') await audioCtxRef.current.resume();
-      
       const mixedDest = audioCtxRef.current.createMediaStreamDestination();
       const micSource = audioCtxRef.current.createMediaStreamSource(stream);
       const micGain = audioCtxRef.current.createGain();
       micGain.gain.value = 1.0; 
       micSource.connect(micGain);
       micGain.connect(mixedDest);
-
       if (beatAudioRef.current && beatUrl) {
-        if (!musicSourceNodeRef.current) {
-            musicSourceNodeRef.current = audioCtxRef.current.createMediaElementSource(beatAudioRef.current);
-        }
+        if (!musicSourceNodeRef.current) { musicSourceNodeRef.current = audioCtxRef.current.createMediaElementSource(beatAudioRef.current); }
         const musicGain = audioCtxRef.current.createGain();
         musicGain.gain.value = 0.5;
         musicSourceNodeRef.current.connect(musicGain);
         musicGain.connect(mixedDest);
         musicSourceNodeRef.current.connect(audioCtxRef.current.destination);
       }
-      
       footerMediaRecorder.current = new MediaRecorder(mixedDest.stream);
       footerAudioChunks.current = [];
       footerMediaRecorder.current.ondataavailable = (e) => { if (e.data.size > 0) footerAudioChunks.current.push(e.data); };
@@ -443,11 +376,9 @@ export default function Home() {
         setFooterAudioUrl(URL.createObjectURL(blob));
         micStreamRef.current?.getTracks().forEach(t => t.stop());
       };
-      
       footerMediaRecorder.current.start();
       isRecordingRef.current = true;
       setIsFooterRecording(true);
-
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SR) {
         footerRecognition.current = new SR();
@@ -459,10 +390,7 @@ export default function Home() {
           if (editorRef.current) { editorRef.current.innerText = totalText; setSyllableCount(countTotalSyllablesFromRaw(totalText)); }
         };
         footerRecognition.current.onend = () => { 
-          if (isRecordingRef.current) {
-            if (editorRef.current) accumulatedSpeechRef.current = editorRef.current.innerText;
-            footerRecognition.current.start(); 
-          }
+          if (isRecordingRef.current) { if (editorRef.current) accumulatedSpeechRef.current = editorRef.current.innerText; footerRecognition.current.start(); }
         };
         footerRecognition.current.start();
       }
@@ -490,13 +418,7 @@ export default function Home() {
       const data = await res.json(); const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) {
         let clean = text.replace(/[*_#`[\]()]/g, '').trim().split('\n').filter(l => l.trim() !== '').slice(0, 4).join('\n');
-        const bar = { 
-            text: String(clean.replace(/\n/g, '<br>')), 
-            syllables: countTotalSyllablesFromRaw(clean), 
-            isDimmed: false, 
-            audio: null, 
-            sentAt: Date.now() 
-        };
+        const bar = { text: String(clean.replace(/\n/g, '<br>')), syllables: countTotalSyllablesFromRaw(clean), isDimmed: false, audio: null, sentAt: Date.now() };
         setBattleRows(prev => { 
           const next = [...prev], idx = next.findIndex(r => !r[activeSide]);
           if (idx !== -1) { next[idx] = { ...next[idx], [activeSide === 'left' ? 'right' : 'left']: bar }; return next; }
@@ -518,13 +440,8 @@ export default function Home() {
   const toggleAutoColorInput = (e) => {
     if (e) e.preventDefault();
     if (!editorRef.current) return;
-    if (isAutoColored) { 
-      editorRef.current.innerHTML = editorRef.current.innerText; 
-      setIsAutoColored(false); 
-    } else { 
-      editorRef.current.innerHTML = applyRhymeColorsToText(editorRef.current.innerText); 
-      setIsAutoColored(true); 
-    }
+    if (isAutoColored) { editorRef.current.innerHTML = editorRef.current.innerText; setIsAutoColored(false); } 
+    else { editorRef.current.innerHTML = applyRhymeColorsToText(editorRef.current.innerText); setIsAutoColored(true); }
   };
 
   const addTrainingWord = () => {
@@ -550,17 +467,27 @@ export default function Home() {
     setIntensity(Math.min((Number(totalCount) || 0) * 4, 95));
   }, [battleRows]);
 
+  // 🔴 VERIFICACIÓN FINAL: PANTALLA DE CARGA SIEMPRE AL FINAL 🔴
+  // Si movemos esto arriba de los Hooks (useCallback, useEffect, etc.), React explota.
+  // Aquí es seguro porque React ya "leyó" todos los hooks necesarios.
+  if (loading || !user) return <div className="h-screen w-full bg-[#0a0a0c] flex items-center justify-center text-cyan-400 font-black tracking-[0.5em] animate-pulse">CARGANDO MATRIZ...</div>;
+
   return (
     <div className="h-screen bg-[#0a0a0c] text-white font-sans flex flex-col overflow-hidden relative">
       <audio ref={beatAudioRef} crossOrigin="anonymous" onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)} onLoadedMetadata={(e) => { if(e.target.duration) setDuration(e.target.duration); }} loop />
       <div className="absolute inset-0 pointer-events-none opacity-20 transition-all duration-1000" style={{ background: `radial-gradient(circle at 50% 50%, #22d3ee 0%, transparent ${intensity}%)`, filter: `blur(${intensity / 2}px)` }} />
 
       <div className="flex-none border-b border-white/5 p-4 bg-black/90 backdrop-blur-xl z-30 grid grid-cols-[1fr_auto_1fr] items-center shadow-2xl">
-        {/* MODIFICADO: Ahora el input de P1 muestra tu nombre real y un botón de Logout */}
         <div className="flex justify-start pr-4">
-            <div className="max-w-[200px] w-full flex flex-col">
-                <input value={p1Name} onChange={e => setP1Name(e.target.value.toUpperCase())} className="bg-transparent border-none outline-none text-lg font-black text-cyan-400 uppercase tracking-widest w-full" disabled />
-                <button onClick={logout} className="text-[8px] text-red-500 hover:text-red-400 text-left uppercase font-bold tracking-widest cursor-pointer mt-1">Cerrar Sesión</button>
+            <div className="max-w-[200px] w-full flex flex-col group cursor-pointer" onClick={() => setShowProfile(true)}>
+                <div className="flex items-center gap-2">
+                    <input value={p1Name} readOnly className="bg-transparent border-none outline-none text-lg font-black text-cyan-400 uppercase tracking-widest w-full cursor-pointer pointer-events-none" />
+                    <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" title="Ver Perfil RPG"></div>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-[8px] text-white/40 font-bold tracking-widest">VER PERFIL RPG</span>
+                    <button onClick={(e) => { e.stopPropagation(); logout(); }} className="text-[8px] text-red-500 hover:text-red-400 uppercase font-bold tracking-widest hover:underline">SALIR</button>
+                </div>
             </div>
         </div>
         
@@ -636,6 +563,13 @@ export default function Home() {
            <div className="flex flex-col gap-3 pb-8 flex-none"><button type="button" onClick={removeHighlightSelection} className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors" title="Borrar Resaltado"><Eraser size={14} /></button><button type="button" onClick={() => setBattleRows(prev => prev.map(r => ({...r, left: r.left?{...r.left, isDimmed:true}:null, right: r.right?{...r.right, isDimmed:true}:null})))} className="w-8 h-8 rounded bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-500 shadow-lg" title="Apagar todo"><Power size={14} /></button><button type="button" onClick={() => setBattleRows([])} className="w-8 h-8 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors" title="Limpiar Canvas"><Trash2 size={14} /></button></div>
         </div>
       </div>
+      
+      {/* SECCIÓN DE PERFIL COMENTADA POR SEGURIDAD SI NO TIENES EL COMPONENTE */}
+      {/* {showProfile && user && (
+        <UserProfile user={user} onClose={() => setShowProfile(false)} />
+      )}
+      */}
+
       <style>{`
         @keyframes lightning-elegant { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 10px #FFFF00); } 50% { opacity: 0.4; filter: drop-shadow(0 0 3px #FFFF00); } }
         .animate-lightning-elegant { animation: lightning-elegant 2.5s ease-in-out infinite; }
