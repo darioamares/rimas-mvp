@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useUserAuth } from '../context/AuthContext'; 
 import { useRouter } from 'next/navigation'; 
-import UserProfile from '../components/UserProfile'; // <--- NUEVO: Importamos el perfil
+import UserProfile from '../components/UserProfile'; 
 import { Palette, Shield, Send, Trash2, Cpu, ChevronLeft, ChevronRight, Highlighter, Eraser, Sparkles, Type, Minus, Plus, X, GripVertical, Move, Power, ZapOff, Bot, Loader2, Sword, Edit2, Zap as ZapIcon, Trophy, Music, Sparkle, Mic, Square, Play, Pause, Target, Dna, MicOff, Disc, Volume2, Settings, Upload, BarChart2, BrainCircuit } from 'lucide-react';
 import { db } from '../lib/firebase'; 
 import { collection, addDoc } from "firebase/firestore";
@@ -185,7 +185,7 @@ export default function Home() {
   const [trainingList, setTrainingList] = useState(new Set(INITIAL_STOPWORDS));
   const [newTrainingWord, setNewTrainingWord] = useState("");
   const [showTrainingPanel, setShowTrainingPanel] = useState(false);
-  const [showProfile, setShowProfile] = useState(false); // <--- NUEVO: Estado del perfil
+  const [showProfile, setShowProfile] = useState(false); 
 
   // --- REFS ---
   const beatAudioRef = useRef(null);
@@ -210,9 +210,7 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
-  if (loading || !user) return <div className="h-screen w-full bg-[#0a0a0c] flex items-center justify-center text-cyan-400 font-black tracking-[0.5em] animate-pulse">CARGANDO MATRIZ...</div>;
-
-  // --- MOTOR FONÉTICO ---
+  // --- MOTOR FONÉTICO Y CALLBACKS (Movidos ANTES del return condicional) ---
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -551,6 +549,9 @@ export default function Home() {
     setIntensity(Math.min((Number(totalCount) || 0) * 4, 95));
   }, [battleRows]);
 
+  // --- RETURN CONDICIONAL (MOVIDO AL FINAL PARA EVITAR ERROR #310) ---
+  if (loading || !user) return <div className="h-screen w-full bg-[#0a0a0c] flex items-center justify-center text-cyan-400 font-black tracking-[0.5em] animate-pulse">CARGANDO MATRIZ...</div>;
+
   return (
     <div className="h-screen bg-[#0a0a0c] text-white font-sans flex flex-col overflow-hidden relative">
       <audio ref={beatAudioRef} crossOrigin="anonymous" onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)} onLoadedMetadata={(e) => { if(e.target.duration) setDuration(e.target.duration); }} loop />
@@ -644,56 +645,6 @@ export default function Home() {
            <div className="grid grid-cols-2 gap-2 px-1 flex-none">{COLORS.map(color => (<button key={color.id} type="button" onMouseDown={e => { e.preventDefault(); applyHighlightSelection(color); }} className="w-5 h-5 rounded-sm border border-black/40 hover:scale-110 transition-transform shadow-lg" style={{ backgroundColor: color.hex }} />))}</div>
            <div className="my-2 w-6 h-px bg-white/10 flex-none" />
            <div className="flex flex-col gap-3 pb-8 flex-none"><button type="button" onClick={removeHighlightSelection} className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors" title="Borrar Resaltado"><Eraser size={14} /></button><button type="button" onClick={() => setBattleRows(prev => prev.map(r => ({...r, left: r.left?{...r.left, isDimmed:true}:null, right: r.right?{...r.right, isDimmed:true}:null})))} className="w-8 h-8 rounded bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-500 shadow-lg" title="Apagar todo"><Power size={14} /></button><button type="button" onClick={() => setBattleRows([])} className="w-8 h-8 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors" title="Limpiar Canvas"><Trash2 size={14} /></button></div>
-        </div>
-      </div>
-
-      <div className="flex-none p-4 bg-black border-t border-white/5 shadow-2xl relative z-40">
-        <div className="max-w-4xl mx-auto flex flex-col gap-3">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setActiveSide('left')} className={`px-4 py-1.5 rounded-full text-[9px] font-black transition-all border ${activeSide === 'left' ? 'bg-cyan-500 border-cyan-500 text-white shadow-[0_0_15px_rgba(34,211,238,0.4)]' : 'bg-white/5 border-white/10 text-white/40'}`}>ESCRIBES TÚ</button>
-              <button type="button" onClick={() => setActiveSide('right')} className={`px-4 py-1.5 rounded-full text-[9px] font-black transition-all border ${activeSide === 'right' ? 'bg-red-600 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-white/5 border-white/10 text-white/40'}`}>ESCRIBE RIVAL</button>
-              <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-1.5 rounded-full min-w-[320px]"><button type="button" onClick={handleBeatToggle} className={`flex-none transition-all ${!beatUrl ? 'opacity-30' : 'hover:scale-110'}`}>{isBeatPlaying ? <Pause size={16} fill="white" className="text-white" /> : <span className="text-[18px]">🗽</span>}</button><div className="flex-1 flex flex-col gap-1"><input type="range" min="0" max={duration || 0} value={currentTime} onChange={handleSeek} className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-cyan-400 custom-range" /><div className="flex justify-between items-center text-[7px] font-black tracking-widest text-white/40 tabular-nums font-mono"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div></div></div>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setShowTrainingPanel(!showTrainingPanel)} className={`px-4 py-1.5 rounded-full text-[9px] font-black flex items-center gap-1.5 transition-all border ${showTrainingPanel ? 'bg-yellow-500 border-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.4)]' : 'bg-white/5 border-white/10 text-white/40 hover:text-yellow-500'}`}><BrainCircuit size={12} /> ENTRENAR</button>
-              <button type="button" onClick={toggleAutoColorInput} className={`px-4 py-1.5 rounded-full text-[9px] font-black flex items-center gap-1.5 transition-all relative overflow-hidden group ${isAutoColored ? 'bg-indigo-600 text-white shadow-[0_0_15px_indigo]' : 'bg-black text-white border border-white/20 shadow-lg'}`}><Sparkles size={12} /> {isAutoColored ? 'QUITAR' : 'AUTO-COLOR'}</button>
-              <button type="button" onClick={generateAIResponse} disabled={isGeneratingAI} className="px-5 py-1.5 rounded-full text-[9px] font-black flex items-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 text-white disabled:opacity-50 shadow-lg active:scale-95 transition-all"><Dna size={12} /> INVOCAR DEMIURGO</button>
-            </div>
-          </div>
-
-          {showTrainingPanel && (
-            <div className="bg-slate-950 border border-yellow-500/30 rounded-xl p-4 animate-in slide-in-from-bottom-2 shadow-2xl">
-                <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
-                    <span className="text-[10px] font-black tracking-widest text-yellow-500 uppercase flex items-center gap-2"><BrainCircuit size={14}/> Entrenamiento de Motor</span>
-                    <button onClick={() => setShowTrainingPanel(false)} className="text-white/20 hover:text-white"><X size={12} /></button>
-                </div>
-                <div className="flex gap-2 mb-4">
-                    <input type="text" placeholder="Escribe palabra a ignorar..." className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-yellow-500" value={newTrainingWord} onChange={(e) => setNewTrainingWord(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTrainingWord()} />
-                    <button onClick={addTrainingWord} className="bg-yellow-500 text-black px-4 py-2 rounded-lg font-black text-[10px] uppercase active:scale-95">AÑADIR</button>
-                </div>
-                <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto custom-scrollbar">
-                    {Array.from(trainingList).filter(w => !INITIAL_STOPWORDS.includes(w)).map(word => (
-                        <span key={word} className="bg-white/5 border border-white/10 rounded-full px-2 py-1 text-[8px] flex items-center gap-1.5 group hover:border-rose-500 transition-colors uppercase font-bold tracking-tighter">
-                            {word}
-                            <button onClick={() => removeTrainingWord(word)} className="text-white/20 group-hover:text-rose-500"><X size={8}/></button>
-                        </span>
-                    ))}
-                </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <div className="flex-1 bg-white/5 border border-white/10 rounded-xl flex items-center min-h-[50px] focus-within:border-cyan-500/50 px-4 relative shadow-inner"><div 
-                ref={editorRef} 
-                contentEditable 
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dropBar(); } }} 
-                onInput={handleEditorInput} 
-                className="flex-1 bg-transparent py-3 outline-none text-lg font-bold italic text-white tracking-tight" 
-                data-placeholder="Di lo que tu alma dicta..." 
-            /><div className="flex items-center gap-3"><div className="text-[9px] font-black text-white/20 uppercase tracking-widest tabular-nums font-mono">{String(syllableCount || 0)} SIL</div><button type="button" onClick={isFooterRecording ? stopFooterRecording : startFooterRecording} className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${isFooterRecording ? 'bg-red-600 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}><Mic size={18} /></button></div></div>
-            <button type="button" onClick={dropBar} className="px-8 rounded-xl bg-cyan-500 text-white font-black text-xs shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 hover:brightness-110 transition-all">🏆🐗</button>
-          </div>
         </div>
       </div>
       
