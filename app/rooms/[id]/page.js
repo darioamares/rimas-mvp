@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useUserAuth } from '../../../context/AuthContext'; 
 import { useParams, useRouter } from 'next/navigation';
-// Importación correcta de iconos (ya tienes la librería instalada)
 import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle } from 'lucide-react';
 import { db } from '../../../lib/firebase'; 
 import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
@@ -52,7 +51,7 @@ const EditableBubble = memo(({ content, side, fontSize }) => {
 // 🔥 APP PRINCIPAL (SALA DE BATALLA)
 // ==========================================
 export default function BattleRoom() {
-  // 1. HOOKS PRIMERO (SIEMPRE ARRIBA)
+  // 1. HOOKS PRIMERO (SIEMPRE ARRIBA PARA EVITAR ERROR #310)
   const { user, loading, logout } = useUserAuth(); 
   const params = useParams();
   const roomId = params?.id;    
@@ -238,7 +237,7 @@ export default function BattleRoom() {
     else { beatAudioRef.current.play(); setIsBeatPlaying(true); }
   };
 
-  // 6. CONTROL DE SEGURIDAD (HOOK SAFE)
+  // 6. CONTROL DE SEGURIDAD
   useEffect(() => { 
     if (!loading && !user) router.push('/'); 
   }, [user, loading, router]);
@@ -248,7 +247,7 @@ export default function BattleRoom() {
     setIntensity(Math.min(total, 90));
   }, [battleRows]);
 
-  // 7. RENDERIZADO CONDICIONAL AL FINAL (Esto evita el error #310)
+  // 7. RENDERIZADO CONDICIONAL AL FINAL
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-black animate-pulse">CARGANDO SALA...</div>;
   if (!user) return null;
 
@@ -335,4 +334,31 @@ export default function BattleRoom() {
                 </button>
               </div>
             </div>
-            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 rounded-2xl font-black text-
+            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 rounded-2xl font-black text-xs transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.3)]">ENVIAR</button>
+          </div>
+        </div>
+      </div>
+
+      {/* BEAT SETTINGS MODAL */}
+      {showBeatSettings && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-6">
+          <div className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-sm flex flex-col gap-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center">
+              <h2 className="text-cyan-400 font-black text-sm tracking-widest">BEAT ENGINE</h2>
+              <button onClick={() => setShowBeatSettings(false)}><X size={20}/></button>
+            </div>
+            <button onClick={() => fileInputRef.current.click()} className="w-full bg-cyan-600 hover:bg-cyan-500 py-4 rounded-xl font-black text-xs flex items-center justify-center gap-3 transition-all"><Upload size={18}/> SUBIR MP3 DESDE PC/CEL</button>
+            <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files[0]; if(f) { setBeatUrl(URL.createObjectURL(f)); setShowBeatSettings(false); } }} className="hidden" accept="audio/*" />
+            <p className="text-[10px] text-white/30 text-center italic">Sube cualquier pista para empezar la batalla</p>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        [contenteditable]:empty:before { content: attr(data-placeholder); color: rgba(255,255,255,0.2); font-style: italic; }
+      `}</style>
+    </div>
+  );
+}
