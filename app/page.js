@@ -5,128 +5,81 @@ import { useUserAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import Link from 'next/link';
-// Iconos para el menú
-import { Zap, LogOut, Trophy, Mic2 } from 'lucide-react';
+
+// NOTA: He quitado todos los iconos para asegurar que Vercel construya la página sin errores.
 
 export default function HomePage() {
-  // 1. HOOKS (Siempre van al principio del archivo)
   const { user, loading, googleLogin, logout } = useUserAuth();
   const [rivals, setRivals] = useState([]);
 
-  // 2. EFECTO: Cargar lista de rivales en tiempo real
+  // 1. Cargar lista de rivales
   useEffect(() => {
     if (!user) return;
-    
-    // Consultamos la colección "users" de Firebase
     const q = query(collection(db, "users")); 
-    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      // Mapeamos los datos y filtramos para no mostrarte a ti mismo
       const docs = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(u => u.id !== user.uid);
       setRivals(docs);
     });
-
     return () => unsubscribe();
   }, [user]);
 
-  // 3. HELPER: Generar ID único para la sala de chat
+  // Generar ID único
   const getChatId = (uid1, uid2) => {
-    // Ordenamos los IDs alfabéticamente para que siempre sea la misma sala
-    // Ejemplo: "A_B" es lo mismo que "B_A"
     return [uid1, uid2].sort().join("_");
   };
 
-  // 4. PANTALLA DE CARGA (Evita el pantallazo negro)
-  if (loading) {
-    return (
-      <div className="h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-cyan-500 font-black tracking-widest animate-pulse">CARGANDO MATRIZ...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-500">CARGANDO SISTEMA...</div>;
 
-  // 5. PANTALLA DE LOGIN (Si no estás conectado)
+  // LOGIN
   if (!user) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-white">
-        <h1 className="text-5xl font-black italic mb-4">
-          RIMAS <span className="text-cyan-400">MVP</span>
-        </h1>
-        <p className="text-white/60 mb-8 font-bold tracking-widest">PLATAFORMA DE FREESTYLE</p>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
+        <h1 className="text-4xl font-bold mb-8">RIMAS MVP (Modo Seguro)</h1>
         <button 
-          onClick={googleLogin}
-          className="bg-white text-black font-black py-4 px-8 rounded-xl hover:bg-cyan-400 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-3"
+          onClick={googleLogin} 
+          className="bg-white text-black px-8 py-4 rounded-xl font-black text-lg hover:bg-cyan-400 transition-all"
         >
-          <Zap size={20} /> INICIAR CON GOOGLE
+          INICIAR SESIÓN CON GOOGLE
         </button>
       </div>
     );
   }
 
-  // 6. EL LOBBY (Si ya estás logueado: Lista de Rivales)
+  // LOBBY
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-white p-6 font-sans">
-      {/* Cabecera */}
-      <header className="flex justify-between items-center mb-10 pb-6 border-b border-white/10">
-        <div>
-          <h2 className="text-xs font-bold text-cyan-400 tracking-widest">BIENVENIDO</h2>
-          <h1 className="text-2xl font-black uppercase">{user.displayName}</h1>
-        </div>
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="flex justify-between items-center mb-8 border-b border-white/20 pb-4">
+        <h1 className="text-xl font-bold text-cyan-400">HOLA, {user.displayName?.toUpperCase()}</h1>
         <button 
           onClick={logout} 
-          className="p-2 bg-white/5 rounded-full hover:bg-red-500/20 text-red-500 transition-colors"
-          title="Cerrar Sesión"
+          className="text-red-500 text-xs font-bold border border-red-500 px-4 py-2 rounded uppercase"
         >
-          <LogOut size={20} />
+          Cerrar Sesión
         </button>
-      </header>
+      </div>
 
-      {/* Lista Principal */}
-      <main className="max-w-md mx-auto">
-        <h3 className="text-xs font-black text-white/40 mb-6 uppercase tracking-widest flex items-center gap-2">
-          <Trophy size={14} /> Rivales Disponibles ({rivals.length})
-        </h3>
+      <h2 className="text-white/50 mb-4 font-bold text-sm tracking-widest">RIVALES DISPONIBLES ({rivals.length}):</h2>
 
-        <div className="flex flex-col gap-3">
-          {rivals.length > 0 ? (
-            rivals.map((rival) => (
-              <Link 
-                key={rival.id}
-                href={`/rooms/${getChatId(user.uid, rival.id)}`}
-                className="group p-5 bg-white/5 border border-white/10 rounded-2xl hover:border-cyan-500/50 hover:bg-cyan-900/10 transition-all flex justify-between items-center"
-              >
-                <div className="flex items-center gap-4">
-                   {/* Avatar con inicial */}
-                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-600 to-blue-800 flex items-center justify-center font-black">
-                      {rival.displayName ? rival.displayName[0] : 'R'}
-                   </div>
-                   {/* Info del Rival */}
-                   <div>
-                      <h4 className="font-bold text-sm uppercase text-white group-hover:text-cyan-400 transition-colors">
-                        {rival.displayName || 'Anonimo'}
-                      </h4>
-                      <span className="text-[10px] text-yellow-500 font-bold block mt-1">
-                        🏆 ELO: {rival.elo || 800}
-                      </span>
-                   </div>
-                </div>
-                {/* Botón Retar */}
-                <div className="bg-cyan-500 text-black text-[10px] font-black px-4 py-2 rounded-lg shadow-[0_0_10px_rgba(6,182,212,0.4)] flex items-center gap-2 group-hover:scale-105 transition-transform">
-                  <Mic2 size={12} /> RETAR
-                </div>
-              </Link>
-            ))
-          ) : (
-            <div className="text-center py-10 border border-dashed border-white/10 rounded-xl">
-              <p className="text-white/30 italic text-sm">Esperando rivales...</p>
-              <p className="text-[10px] text-white/20 mt-2">Dile a un amigo que entre para probar.</p>
-            </div>
-          )}
-        </div>
-      </main>
+      <div className="flex flex-col gap-3">
+        {rivals.length > 0 ? (
+          rivals.map((rival) => (
+            <Link 
+              key={rival.id} 
+              href={`/rooms/${getChatId(user.uid, rival.id)}`}
+              className="bg-white/10 p-4 rounded-xl flex justify-between items-center hover:bg-cyan-900/40 border border-white/10 transition-all"
+            >
+              <span className="font-bold text-sm">{rival.displayName || 'ANONIMO'}</span>
+              <span className="bg-cyan-500 text-black text-[10px] font-black px-3 py-1.5 rounded">RETAR</span>
+            </Link>
+          ))
+        ) : (
+          <p className="text-white/30 italic text-center py-10 border border-dashed border-white/10 rounded-xl">
+            Esperando a que entre más gente...
+          </p>
+        )}
+      </div>
     </div>
   );
 }
