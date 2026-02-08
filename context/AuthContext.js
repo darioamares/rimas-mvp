@@ -16,12 +16,12 @@ export function AuthContextProvider({ children }) {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Verificar si el usuario ya existe en Firestore
+      // Referencia al documento del usuario en la colección "users"
       const userRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userRef);
 
+      // Si el usuario no existe en la base de datos, lo creamos
       if (!userSnap.exists()) {
-        // Crear perfil inicial (Creyente)
         await setDoc(userRef, {
           uid: user.uid,
           displayName: user.displayName,
@@ -37,16 +37,25 @@ export function AuthContextProvider({ children }) {
             losses: 0
           }
         });
+      } else {
+        // Si ya existe, opcionalmente actualizamos su última conexión
+        await setDoc(userRef, { lastSeen: serverTimestamp() }, { merge: true });
       }
     } catch (error) {
       console.error("Error en login:", error);
     }
   };
 
-  const logout = () => {
-    signOut(auth);
+  // Función para cerrar sesión
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    }
   };
 
+  // Monitor de estado de autenticación
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
