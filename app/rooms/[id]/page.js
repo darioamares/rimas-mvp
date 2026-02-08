@@ -3,20 +3,23 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useUserAuth } from '../../../context/AuthContext'; 
 import { useParams, useRouter } from 'next/navigation';
-import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle, ArrowLeft, LogOut } from 'lucide-react';
+import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle, ArrowLeft, Send } from 'lucide-react';
 import { db } from '../../../lib/firebase'; 
 import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
 import Link from 'next/link';
 
 // --- CONSTANTES ---
 const INITIAL_STOPWORDS = ['el', 'la', 'los', 'las', 'un', 'una', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me'];
+
+// Colores más oscuros/fuertes para que se lean bien sobre fondo blanco
 const COLORS = [
-  { id: 'cyan', hex: '#00FFFF', label: 'Cian', text: 'black' },
-  { id: 'magenta', hex: '#FF00FF', label: 'Rosa', text: 'white' },
-  { id: 'yellow', hex: '#FFFF00', label: 'Amarillo', text: 'black' },
-  { id: 'green', hex: '#00FF00', label: 'Verde', text: 'black' },
-  { id: 'orange', hex: '#FFA500', label: 'Naranja', text: 'black' }
+  { id: 'cyan', hex: '#00bcd4', label: 'Cian', text: 'black' },     
+  { id: 'magenta', hex: '#d500f9', label: 'Rosa', text: 'white' },
+  { id: 'blue', hex: '#2962ff', label: 'Azul', text: 'white' },     
+  { id: 'green', hex: '#00c853', label: 'Verde', text: 'black' },
+  { id: 'red', hex: '#d50000', label: 'Rojo', text: 'white' }
 ];
+
 const CONCEPTS = ["EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", "SUEÑO MECÁNICO"];
 
 // --- HELPERS ---
@@ -30,18 +33,21 @@ const getSyllablesCount = (text) => {
   }, 0);
 };
 
-// --- COMPONENTE BUBBLE ---
+// --- COMPONENTE BUBBLE (Diseño Clásico Restaurado) ---
 const EditableBubble = memo(({ content, isMe, authorName, fontSize }) => {
   return (
     <div className={`flex flex-col w-full ${isMe ? 'items-end' : 'items-start'} mb-4 animate-in fade-in slide-in-from-bottom-2`}>
-      <span className="text-[10px] font-black text-white/30 mb-1 px-1 uppercase tracking-wider">
-        {authorName}
+      {/* Nombre del Usuario (Siempre visible) */}
+      <span className="text-[10px] font-bold text-white/60 mb-1 px-2 uppercase tracking-wider">
+        {authorName || 'Desconocido'}
       </span>
+      
+      {/* Burbuja de Texto (Fondo Sólido) */}
       <div 
-        className={`max-w-[85%] p-4 rounded-2xl text-lg font-bold leading-relaxed shadow-xl break-words
+        className={`max-w-[85%] px-5 py-3 rounded-2xl text-base md:text-lg font-bold leading-snug shadow-lg break-words
           ${isMe 
-            ? 'bg-cyan-600/20 border border-cyan-500/50 text-white rounded-tr-none' 
-            : 'bg-white/10 text-white rounded-tl-none border border-white/10'
+            ? 'bg-cyan-500 text-black rounded-tr-none border-2 border-cyan-600' // TU BURBUJA
+            : 'bg-white text-black rounded-tl-none border-2 border-gray-300'    // BURBUJA RIVAL (BLANCA)
           }`}
         style={{ fontSize: `${fontSize}px` }}
         dangerouslySetInnerHTML={{ __html: content }}
@@ -51,7 +57,7 @@ const EditableBubble = memo(({ content, isMe, authorName, fontSize }) => {
 });
 
 // ==========================================
-// 🔥 APP PRINCIPAL (SALA DE BATALLA)
+// 🔥 APP PRINCIPAL
 // ==========================================
 export default function BattleRoom() {
   const { user, loading } = useUserAuth(); 
@@ -68,7 +74,7 @@ export default function BattleRoom() {
   const [showBeatSettings, setShowBeatSettings] = useState(false);
   const [isFooterRecording, setIsFooterRecording] = useState(false);
   
-  // ACTIVADO POR DEFECTO PARA QUE COLOREE SIEMPRE
+  // ACTIVADO POR DEFECTO
   const [isAutoColored, setIsAutoColored] = useState(true);
 
   // REFS
@@ -79,7 +85,7 @@ export default function BattleRoom() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef("");
 
-  // 1. ESCUCHA DE MENSAJES (FIREBASE)
+  // 1. ESCUCHA DE MENSAJES
   useEffect(() => {
     if (!roomId) return;
     const q = query(collection(db, "rooms", roomId, "messages"), orderBy("sentAt", "asc"));
@@ -93,7 +99,7 @@ export default function BattleRoom() {
     return () => unsubscribe();
   }, [roomId]);
 
-  // 2. LOGICA DE RIMA Y COLORES
+  // 2. LOGICA DE RIMA Y COLORES (Robustez mejorada)
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -102,17 +108,10 @@ export default function BattleRoom() {
     
     let vPos = [];
     for (let i = 0; i < clean.length; i++) if (vowels.includes(clean[i])) vPos.push(i);
-    
     if (vPos.length === 0) return null;
     
-    // Simplificación: Tomamos las últimas 2 vocales para la asonancia
-    let stressIdx = 0;
-    if (vPos.length >= 2) {
-        stressIdx = vPos[vPos.length - 2];
-    } else {
-        stressIdx = vPos[0];
-    }
-
+    // Últimas 2 vocales
+    let stressIdx = vPos.length >= 2 ? vPos[vPos.length - 2] : vPos[0];
     let sig = "";
     for (let i = stressIdx; i < clean.length; i++) {
         if (vowels.includes(clean[i])) sig += normalize(clean[i]);
@@ -122,12 +121,13 @@ export default function BattleRoom() {
 
   const applyRhymeColors = useCallback((rawText) => {
     if (!rawText) return "";
-    // Limpiamos etiquetas HTML previas si las hubiera
-    const cleanText = String(rawText).replace(/<[^>]*>/g, '');
-    const words = cleanText.split(/([\s,.;:!?]+)/); // Mantiene los separadores
+    const cleanText = String(rawText).replace(/<[^>]*>/g, ''); // Limpiar HTML previo
+    // Separamos manteniendo puntuación para reconstruir la frase perfecta
+    const words = cleanText.split(/([\s,.;:!?]+)/);
     
-    // 1. Detectar rimas (contar firmas vocálicas)
     const sigMap = {};
+    
+    // Paso 1: Mapear rimas
     words.forEach(w => {
       const trimmed = w.trim();
       if (!trimmed) return;
@@ -137,27 +137,28 @@ export default function BattleRoom() {
       }
     });
 
-    // 2. Asignar colores solo si la rima se repite
     const activeColors = {};
     let cIdx = 0;
+    
+    // Paso 2: Asignar colores
     Object.keys(sigMap).forEach(sig => {
-      if (sigMap[sig] > 1) { // Solo si rima con algo más
+      if (sigMap[sig] > 1) { 
         activeColors[sig] = COLORS[cIdx % COLORS.length];
         cIdx++;
       }
     });
 
-    // 3. Reconstruir texto con colores
+    // Paso 3: Reconstruir HTML
     return words.map(word => {
       const trimmed = word.trim();
-      if (!trimmed) return word; // Es un espacio o signo
+      if (!trimmed) return word;
       
       const sig = getVocalicSignature(trimmed);
       const color = activeColors[sig];
       
-      // Si tiene color asignado y no es stopword
       if (color && !INITIAL_STOPWORDS.includes(trimmed.toLowerCase())) {
-        return `<span style="color: ${color.hex}; text-shadow: 0 0 10px ${color.hex}; font-weight: 800;">${word}</span>`;
+        // Estilo fuerte: Color de fondo suave + Texto del color o Negrita
+        return `<span style="color: ${color.hex}; font-weight: 900; text-shadow: 1px 1px 0px rgba(0,0,0,0.1);">${word}</span>`;
       }
       return word;
     }).join('');
@@ -169,7 +170,7 @@ export default function BattleRoom() {
     const rawText = editorRef.current.innerText;
     if (!rawText.trim()) return;
 
-    // APLICAR COLOR SI EL BOTÓN ESTÁ ACTIVO
+    // APLICAR COLOR SI ESTÁ ACTIVADO
     const processedText = isAutoColored ? applyRhymeColors(rawText) : rawText;
     
     const bar = { 
@@ -183,7 +184,7 @@ export default function BattleRoom() {
     try { 
       await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
     } catch (e) { 
-      console.error("Error al guardar:", e); 
+      console.error(e); 
     }
     
     editorRef.current.innerText = '';
@@ -192,7 +193,7 @@ export default function BattleRoom() {
     if (scrollRef.current) scrollRef.current.scrollTo(0, scrollRef.current.scrollHeight);
   };
 
-  // 4. AUDIO Y MICROFONO
+  // 4. AUDIO
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -236,117 +237,118 @@ export default function BattleRoom() {
     else { beatAudioRef.current.play(); setIsBeatPlaying(true); }
   };
 
-  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-black animate-pulse">CARGANDO...</div>;
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-bold">CARGANDO...</div>;
   if (!user) return null;
 
   return (
-    <div className="h-screen bg-[#0a0a0c] text-white font-sans flex flex-col overflow-hidden relative">
+    <div className="h-[100dvh] bg-[#0a0a0c] text-white font-sans flex flex-col overflow-hidden relative">
       <audio ref={beatAudioRef} src={beatUrl} loop />
       
-      {/* HEADER MEJORADO CON BOTÓN VOLVER */}
-      <div className="flex-none border-b border-white/5 p-4 bg-black/90 backdrop-blur-xl z-30 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full hover:bg-red-500/20 hover:text-red-400 transition-all text-xs font-black border border-white/10">
-          <ArrowLeft size={16} /> VOLVER AL LOBBY
+      {/* 1. HEADER (Compacto) */}
+      <div className="flex-none bg-black/90 border-b border-white/10 p-2 flex justify-between items-center z-30 shadow-md">
+        <Link href="/" className="p-2 text-white/70 hover:text-white flex items-center gap-1 bg-white/5 rounded-lg border border-white/5">
+          <ArrowLeft size={18} /> <span className="text-xs font-bold">SALIR</span>
         </Link>
-        
-        <div className="flex items-center gap-2">
-          <Zap size={24} className="text-yellow-400 fill-yellow-400" />
-          <h1 className="font-black italic text-xl tracking-tighter hidden sm:block">SALA <span className="text-cyan-400">PVP</span></h1>
+        <div className="flex flex-col items-center">
+          <h1 className="font-black italic text-lg tracking-tighter">SALA <span className="text-cyan-400">PVP</span></h1>
         </div>
-        
-        <div className="w-[120px]"></div> {/* Espaciador invisible para centrar el título */}
+        <div className="w-16"></div> 
       </div>
 
-      {/* TEMA ACTUAL */}
+      {/* 2. BARRA DE HERRAMIENTAS */}
+      <div className="flex-none bg-[#111] border-b border-white/5 p-2 flex justify-around items-center z-20">
+         <button onClick={() => setCurrentTheme(CONCEPTS[Math.floor(Math.random()*CONCEPTS.length)])} className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5 active:scale-95">
+            <Sparkle size={14} className="text-yellow-400"/>
+            <span className="text-[10px] font-bold text-white/80">TEMA</span>
+         </button>
+
+         <button onClick={handleBeat} className={`flex items-center gap-2 px-3 py-1 rounded-full border active:scale-95 ${isBeatPlaying ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400' : 'bg-white/5 border-white/5 text-white/40'}`}>
+            <Disc size={14} className={isBeatPlaying ? "animate-spin" : ""} />
+            <span className="text-[10px] font-bold">{isBeatPlaying ? 'STOP' : 'BEAT'}</span>
+         </button>
+
+         <button onClick={() => setIsAutoColored(!isAutoColored)} className={`flex items-center gap-2 px-3 py-1 rounded-full border active:scale-95 ${isAutoColored ? 'bg-green-900/40 border-green-500 text-green-400' : 'bg-white/5 border-white/5 text-white/40'}`}>
+            <Sparkles size={14} />
+            <span className="text-[10px] font-bold">{isAutoColored ? 'ON' : 'OFF'}</span>
+         </button>
+      </div>
+
+      {/* TEMA FLOTANTE */}
       {currentTheme && (
-        <div className="flex-none bg-cyan-950/30 border-b border-white/5 py-1 text-center animate-in slide-in-from-top">
-          <span className="text-[10px] font-black tracking-[0.3em] text-white/60 italic">CONCEPTO: {currentTheme}</span>
+        <div className="absolute top-[110px] w-full text-center pointer-events-none z-10 animate-in slide-in-from-top-4">
+          <span className="bg-black/80 px-4 py-2 rounded-full text-[10px] font-black tracking-[0.2em] text-cyan-200 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+            {currentTheme}
+          </span>
         </div>
       )}
 
-      {/* ÁREA DE BATALLA */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2" ref={scrollRef}>
-        {messages.map((msg) => {
-          const isMe = msg.uid === user.uid; 
-          return (
+      {/* 3. ÁREA DE CHAT (Fondo Oscuro para contraste con burbujas) */}
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2 bg-[#0a0a0c]" ref={scrollRef}>
+        {messages.map((msg) => (
              <EditableBubble 
                 key={msg.id} 
                 content={msg.text} 
-                isMe={isMe} 
+                isMe={msg.uid === user.uid} 
                 authorName={msg.authorName} 
                 fontSize={fontSize} 
              />
-          );
-        })}
+        ))}
+        <div className="h-4 w-full"></div>
       </div>
 
-      {/* CONTROLES FLOTANTES */}
-      <div className="absolute left-4 top-20 flex flex-col gap-4 z-20">
-        <button onClick={() => setCurrentTheme(CONCEPTS[Math.floor(Math.random()*CONCEPTS.length)])} className="w-10 h-10 bg-black/50 border border-white/10 rounded-full flex items-center justify-center text-yellow-400 backdrop-blur-md hover:bg-white/10 shadow-lg"><Sparkle size={20}/></button>
-        <button onClick={() => setShowBeatSettings(true)} className="w-10 h-10 bg-black/50 border border-white/10 rounded-full flex items-center justify-center text-cyan-400 backdrop-blur-md hover:bg-white/10 shadow-lg"><Disc size={20}/></button>
-      </div>
-
-      {/* FOOTER INPUT */}
-      <div className="flex-none p-4 bg-black border-t border-white/10 shadow-2xl z-40">
-        <div className="max-w-4xl mx-auto flex flex-col gap-3">
-          <div className="flex justify-between items-center px-1">
-             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider truncate max-w-[150px]">
-               {user.displayName}
-             </span>
-             <div className="flex gap-2">
-                {/* BOTÓN AUTO-COLOR MEJORADO */}
-                <button 
-                  onClick={() => setIsAutoColored(!isAutoColored)} 
-                  className={`flex items-center gap-1 px-4 py-1.5 rounded-full text-[10px] font-black border transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)]
-                  ${isAutoColored 
-                    ? 'bg-yellow-400 text-black border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]' 
-                    : 'bg-transparent border-white/10 text-white/40'}`}
-                >
-                  <Sparkles size={12} fill={isAutoColored ? "black" : "none"}/> {isAutoColored ? 'COLOR ON' : 'COLOR OFF'}
-                </button>
-
-                <button onClick={handleBeat} className={`px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${isBeatPlaying ? 'border-cyan-400 text-cyan-400 bg-cyan-950/30' : 'border-white/10 text-white/40'}`}>{isBeatPlaying ? 'PAUSE' : 'PLAY'}</button>
-             </div>
-          </div>
-
-          <div className="flex gap-2">
-            <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl flex items-center px-4 min-h-[50px] focus-within:border-cyan-500/50 transition-all">
-              <div 
+      {/* 4. FOOTER INPUT (Diseño App Nativa) */}
+      <div className="flex-none bg-[#050505] border-t border-white/10 p-3 pb-safe z-40 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+        <div className="flex items-end gap-2 max-w-4xl mx-auto">
+          
+          <div className="flex-1 bg-[#1a1a1c] rounded-3xl flex items-center min-h-[48px] max-h-[120px] focus-within:ring-1 focus-within:ring-cyan-500 transition-all overflow-hidden relative border border-white/5">
+             <div 
                 ref={editorRef} 
                 contentEditable 
                 onInput={(e) => setSyllableCount(getSyllablesCount(e.currentTarget.innerText))}
                 onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dropBar(); } }}
-                className="flex-1 outline-none font-bold text-white py-2"
-                data-placeholder="Escupe tu rima..."
+                className="flex-1 px-4 py-3 outline-none font-bold text-white text-base max-h-[100px] overflow-y-auto"
+                data-placeholder="Escribe tu rima..."
               />
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black text-white/20 tabular-nums">{syllableCount} SIL</span>
-                <button onClick={toggleMic} className={`p-2 rounded-full transition-all ${isFooterRecording ? 'bg-red-500 text-white animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]' : 'text-white/40 hover:text-white'}`}>
-                  {isFooterRecording ? <Square size={16} fill="white" /> : <Mic size={18} />}
-                </button>
+              
+              <div className="flex items-center gap-2 pr-3">
+                 {syllableCount > 0 && (
+                   <span className="text-[10px] font-black text-white/30 tabular-nums">{syllableCount}</span>
+                 )}
+                 <button 
+                   onClick={toggleMic} 
+                   className={`p-2 rounded-full transition-all ${isFooterRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' : 'text-white/40 hover:text-white'}`}
+                 >
+                   {isFooterRecording ? <Square size={16} fill="white" /> : <Mic size={20} />}
+                 </button>
               </div>
-            </div>
-            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-black px-6 rounded-2xl font-black text-xs transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]">ENVIAR</button>
           </div>
+
+          <button 
+            onClick={dropBar} 
+            className="bg-cyan-500 hover:bg-cyan-400 text-black w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+          >
+            <Send size={20} fill="black" className="ml-0.5" />
+          </button>
         </div>
       </div>
 
       {/* MODAL BEAT */}
       {showBeatSettings && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-6 animate-in fade-in">
-          <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-xs relative shadow-2xl">
-            <button onClick={() => setShowBeatSettings(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><X size={20}/></button>
-            <h2 className="text-cyan-400 font-black text-sm mb-4">SUBIR BEAT (MP3)</h2>
-            <button onClick={() => fileInputRef.current.click()} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all"><Upload size={16}/> SELECCIONAR ARCHIVO</button>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center z-[100] p-6 animate-in fade-in">
+          <div className="bg-[#111] border border-white/10 p-6 rounded-3xl w-full max-w-xs relative shadow-2xl">
+            <button onClick={() => setShowBeatSettings(false)} className="absolute top-4 right-4 text-white/40"><X size={20}/></button>
+            <h2 className="text-cyan-400 font-black text-sm mb-6 text-center tracking-widest">SUBIR BEAT</h2>
+            <button onClick={() => fileInputRef.current.click()} className="w-full bg-cyan-600 hover:bg-cyan-500 py-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-900/50">
+              <Upload size={18}/> SELECCIONAR MP3
+            </button>
             <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files[0]; if(f) { setBeatUrl(URL.createObjectURL(f)); setShowBeatSettings(false); } }} className="hidden" accept="audio/*" />
           </div>
         </div>
       )}
 
       <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        [contenteditable]:empty:before { content: attr(data-placeholder); color: rgba(255,255,255,0.2); font-style: italic; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        [contenteditable]:empty:before { content: attr(data-placeholder); color: rgba(255,255,255,0.3); }
       `}</style>
     </div>
   );
