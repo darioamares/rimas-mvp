@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useUserAuth } from '../../../context/AuthContext'; 
 import { useParams, useRouter } from 'next/navigation';
-import { Trash2, X, Power, Zap as ZapIcon, Settings, Upload, Mic, Square, Sparkles, Plus, Minus, Target, Eraser, Disc, Pause, Sparkle } from 'lucide-react';
+// Importación correcta de iconos (ya tienes la librería instalada)
+import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle } from 'lucide-react';
 import { db } from '../../../lib/firebase'; 
 import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
 
@@ -48,19 +49,19 @@ const EditableBubble = memo(({ content, side, fontSize }) => {
 });
 
 // ==========================================
-// 🔥 APP PRINCIPAL
+// 🔥 APP PRINCIPAL (SALA DE BATALLA)
 // ==========================================
-export default function Home() {
-  // 1. HOOKS DE ESTADO (ORDEN ESTRICTO)
+export default function BattleRoom() {
+  // 1. HOOKS PRIMERO (SIEMPRE ARRIBA)
   const { user, loading, logout } = useUserAuth(); 
-  const params = useParams(); //
-  const roomId = params.id;    //
+  const params = useParams();
+  const roomId = params?.id;    
   const router = useRouter();
   
   const [battleRows, setBattleRows] = useState([]);
   const [currentTheme, setCurrentTheme] = useState("");
   const [intensity, setIntensity] = useState(0); 
-  const [p1Name, setP1Name] = useState("DARÍO AMARES");
+  const [p1Name, setP1Name] = useState("JUGADOR 1");
   const [p2Name, setP2Name] = useState("RIVAL");
   const [activeSide, setActiveSide] = useState('left');
   const [fontSize, setFontSize] = useState(15);
@@ -79,7 +80,14 @@ export default function Home() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef("");
 
-  // 2. ESCUCHA DE MENSAJES EN TIEMPO REAL (FIREBASE)
+  // 2. EFECTO PARA NOMBRE DE USUARIO
+  useEffect(() => {
+    if (user?.displayName) {
+      setP1Name(user.displayName.toUpperCase());
+    }
+  }, [user]);
+
+  // 3. ESCUCHA DE MENSAJES (FIREBASE)
   useEffect(() => {
     if (!roomId) return;
 
@@ -94,13 +102,11 @@ export default function Home() {
         ...doc.data()
       }));
 
-      // Agrupamos los mensajes en filas para la vista de batalla
       const rows = [];
       messages.forEach((msg) => {
         if (msg.side === 'left') {
           rows.push({ id: msg.id, left: msg, right: null });
         } else {
-          // Intenta rellenar el hueco derecho de la última fila si está vacío
           if (rows.length > 0 && !rows[rows.length - 1].right) {
             rows[rows.length - 1].right = msg;
           } else {
@@ -114,7 +120,7 @@ export default function Home() {
     return () => unsubscribe();
   }, [roomId]);
 
-  // 3. MOTOR FONÉTICO
+  // 4. MOTOR FONÉTICO
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -163,7 +169,7 @@ export default function Home() {
     }).join(' ');
   }, [getVocalicSignature]);
 
-  // 4. EFECTO DE VOZ (SPEECH RECOGNITION)
+  // 5. EFECTO DE VOZ
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -201,7 +207,6 @@ export default function Home() {
     }
   };
 
-  // 5. HANDLERS DE ACCIÓN
   const dropBar = async () => {
     if (!editorRef.current || !roomId) return;
     const rawText = editorRef.current.innerText;
@@ -215,7 +220,6 @@ export default function Home() {
       side: activeSide 
     };
 
-    // Guardado en Firebase usando el ID de la sala
     try { 
       await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
     } catch (e) { 
@@ -234,15 +238,18 @@ export default function Home() {
     else { beatAudioRef.current.play(); setIsBeatPlaying(true); }
   };
 
-  // 6. EFECTOS DE CONTROL
-  useEffect(() => { if (!loading && !user) router.push('/login'); }, [user, loading, router]);
+  // 6. CONTROL DE SEGURIDAD (HOOK SAFE)
+  useEffect(() => { 
+    if (!loading && !user) router.push('/'); 
+  }, [user, loading, router]);
   
   useEffect(() => {
     const total = battleRows.length * 5;
     setIntensity(Math.min(total, 90));
   }, [battleRows]);
 
-  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-black animate-pulse">CARGANDO MATRIZ...</div>;
+  // 7. RENDERIZADO CONDICIONAL AL FINAL (Esto evita el error #310)
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-black animate-pulse">CARGANDO SALA...</div>;
   if (!user) return null;
 
   return (
@@ -256,10 +263,10 @@ export default function Home() {
       <div className="flex-none border-b border-white/5 p-4 bg-black/90 backdrop-blur-xl z-30 grid grid-cols-[1fr_auto_1fr] items-center">
         <div className="flex flex-col">
           <span className="text-cyan-400 font-black tracking-widest text-sm">{p1Name}</span>
-          <button onClick={() => logout()} className="text-[8px] text-red-500 font-bold text-left hover:underline">LOGOUT</button>
+          <button onClick={() => logout()} className="text-[8px] text-red-500 font-bold text-left hover:underline">SALIR</button>
         </div>
         <div className="flex items-center gap-2">
-          <ZapIcon size={30} className="text-yellow-400 fill-yellow-400" />
+          <Zap size={30} className="text-yellow-400 fill-yellow-400" />
           <h1 className="font-black italic text-2xl tracking-tighter">RIMAS <span className="text-cyan-400">MVP</span></h1>
         </div>
         <div className="flex flex-col text-right">
@@ -328,31 +335,4 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 rounded-2xl font-black text-xs transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.3)]">ENVIAR</button>
-          </div>
-        </div>
-      </div>
-
-      {/* BEAT SETTINGS MODAL */}
-      {showBeatSettings && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-6">
-          <div className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-sm flex flex-col gap-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex justify-between items-center">
-              <h2 className="text-cyan-400 font-black text-sm tracking-widest">BEAT ENGINE</h2>
-              <button onClick={() => setShowBeatSettings(false)}><X size={20}/></button>
-            </div>
-            <button onClick={() => fileInputRef.current.click()} className="w-full bg-cyan-600 hover:bg-cyan-500 py-4 rounded-xl font-black text-xs flex items-center justify-center gap-3 transition-all"><Upload size={18}/> SUBIR MP3 DESDE PC/CEL</button>
-            <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files[0]; if(f) { setBeatUrl(URL.createObjectURL(f)); setShowBeatSettings(false); } }} className="hidden" accept="audio/*" />
-            <p className="text-[10px] text-white/30 text-center italic">Sube cualquier pista para empezar la batalla</p>
-          </div>
-        </div>
-      )}
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        [contenteditable]:empty:before { content: attr(data-placeholder); color: rgba(255,255,255,0.2); font-style: italic; }
-      `}</style>
-    </div>
-  );
-}
+            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 rounded-2xl font-black text-
