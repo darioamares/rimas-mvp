@@ -107,7 +107,7 @@ export default function HomePage() {
           ) : (
             <div className="text-center py-10 border border-dashed border-white/10 rounded-xl">
               <p className="text-white/30 italic text-sm">Esperando rivales...</p>
-              <p className="text-[10px] text-white/20 mt-2">Dile a Sebastián que entre para probar.</p>
+              <p className="text-[10px] text-white/20 mt-2">Dile a un amigo que entre para probar.</p>
             </div>
           )}
         </div>
