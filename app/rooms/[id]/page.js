@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { useUserAuth } from '../context/AuthContext'; 
-import { useRouter } from 'next/navigation'; 
+import { useUserAuth } from '../../../context/AuthContext'; 
+import { useParams, useRouter } from 'next/navigation';
 import { Trash2, X, Power, Zap as ZapIcon, Settings, Upload, Mic, Square, Sparkles, Plus, Minus, Target, Eraser, Disc, Pause, Sparkle } from 'lucide-react';
-import { db } from '../lib/firebase'; 
-import { collection, addDoc } from "firebase/firestore";
+import { db } from '../../../lib/firebase'; 
+import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
 
 // --- CONSTANTES ---
 const INITIAL_STOPWORDS = ['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 'ha', 'he', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me', 'se', 'lo', 'le', 'nos', 'os', 'les', 'soy', 'eres', 'este', 'esta', 'estos', 'estas', 'como', 'tan', 'muy', 'pero', 'mas', 'más', 'sus', 'mis', 'tus', 'donde', 'cuando', 'porque'];
@@ -53,6 +53,8 @@ const EditableBubble = memo(({ content, side, fontSize }) => {
 export default function Home() {
   // 1. HOOKS DE ESTADO (ORDEN ESTRICTO)
   const { user, loading, logout } = useUserAuth(); 
+  const params = useParams(); //
+  const roomId = params.id;    //
   const router = useRouter();
   
   const [battleRows, setBattleRows] = useState([]);
@@ -77,7 +79,42 @@ export default function Home() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef("");
 
-  // 2. MOTOR FONÉTICO
+  // 2. ESCUCHA DE MENSAJES EN TIEMPO REAL (FIREBASE)
+  useEffect(() => {
+    if (!roomId) return;
+
+    const q = query(
+      collection(db, "rooms", roomId, "messages"),
+      orderBy("sentAt", "asc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Agrupamos los mensajes en filas para la vista de batalla
+      const rows = [];
+      messages.forEach((msg) => {
+        if (msg.side === 'left') {
+          rows.push({ id: msg.id, left: msg, right: null });
+        } else {
+          // Intenta rellenar el hueco derecho de la última fila si está vacío
+          if (rows.length > 0 && !rows[rows.length - 1].right) {
+            rows[rows.length - 1].right = msg;
+          } else {
+            rows.push({ id: msg.id, left: null, right: msg });
+          }
+        }
+      });
+      setBattleRows(rows);
+    });
+
+    return () => unsubscribe();
+  }, [roomId]);
+
+  // 3. MOTOR FONÉTICO
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -126,7 +163,7 @@ export default function Home() {
     }).join(' ');
   }, [getVocalicSignature]);
 
-  // 3. EFECTO DE VOZ (SPEECH RECOGNITION)
+  // 4. EFECTO DE VOZ (SPEECH RECOGNITION)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -164,9 +201,9 @@ export default function Home() {
     }
   };
 
-  // 4. HANDLERS DE ACCIÓN
+  // 5. HANDLERS DE ACCIÓN
   const dropBar = async () => {
-    if (!editorRef.current) return;
+    if (!editorRef.current || !roomId) return;
     const rawText = editorRef.current.innerText;
     if (!rawText.trim()) return;
 
@@ -178,14 +215,12 @@ export default function Home() {
       side: activeSide 
     };
 
-    setBattleRows(prev => {
-      const next = [...prev];
-      const idx = next.findIndex(r => !r[activeSide]);
-      if (idx !== -1) { next[idx] = { ...next[idx], [activeSide]: bar }; return next; }
-      return [...next, { id: Date.now(), left: activeSide === 'left' ? bar : null, right: activeSide === 'right' ? bar : null }];
-    });
-
-    try { await addDoc(collection(db, "rimas_session"), bar); } catch (e) { console.error(e); }
+    // Guardado en Firebase usando el ID de la sala
+    try { 
+      await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
+    } catch (e) { 
+      console.error("Error al guardar:", e); 
+    }
     
     editorRef.current.innerText = '';
     setSyllableCount(0);
@@ -199,7 +234,7 @@ export default function Home() {
     else { beatAudioRef.current.play(); setIsBeatPlaying(true); }
   };
 
-  // 5. EFECTOS DE CONTROL
+  // 6. EFECTOS DE CONTROL
   useEffect(() => { if (!loading && !user) router.push('/login'); }, [user, loading, router]);
   
   useEffect(() => {
@@ -227,7 +262,10 @@ export default function Home() {
           <ZapIcon size={30} className="text-yellow-400 fill-yellow-400" />
           <h1 className="font-black italic text-2xl tracking-tighter">RIMAS <span className="text-cyan-400">MVP</span></h1>
         </div>
-        <input value={p2Name} onChange={e => setP2Name(e.target.value.toUpperCase())} className="bg-transparent text-right font-black text-red-600 outline-none uppercase" />
+        <div className="flex flex-col text-right">
+           <input value={p2Name} onChange={e => setP2Name(e.target.value.toUpperCase())} className="bg-transparent text-right font-black text-red-600 outline-none uppercase" />
+           <span className="text-[8px] text-white/40 font-bold uppercase">SALA: {roomId}</span>
+        </div>
       </div>
 
       {/* TEMA ACTUAL */}
