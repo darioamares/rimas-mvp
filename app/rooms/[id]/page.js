@@ -3,47 +3,46 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useUserAuth } from '../../../context/AuthContext'; 
 import { useParams, useRouter } from 'next/navigation';
-import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle } from 'lucide-react';
+import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle, ArrowLeft } from 'lucide-react';
 import { db } from '../../../lib/firebase'; 
 import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
+import Link from 'next/link';
 
 // --- CONSTANTES ---
-const INITIAL_STOPWORDS = ['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 'ha', 'he', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me', 'se', 'lo', 'le', 'nos', 'os', 'les', 'soy', 'eres', 'este', 'esta', 'estos', 'estas', 'como', 'tan', 'muy', 'pero', 'mas', 'más', 'sus', 'mis', 'tus', 'donde', 'cuando', 'porque'];
-
+const INITIAL_STOPWORDS = ['el', 'la', 'los', 'las', 'un', 'una', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me'];
 const COLORS = [
   { id: 'cyan', hex: '#00FFFF', label: 'Cian', text: 'black' },
   { id: 'magenta', hex: '#FF00FF', label: 'Rosa', text: 'white' },
   { id: 'yellow', hex: '#FFFF00', label: 'Amarillo', text: 'black' },
-  { id: 'red', hex: '#FF0000', label: 'Rojo', text: 'white' },
-  { id: 'green', hex: '#00FF00', label: 'Verde', text: 'black' },
-  { id: 'purple', hex: '#8B00FF', label: 'Violeta', text: 'white' }
+  { id: 'green', hex: '#00FF00', label: 'Verde', text: 'black' }
 ];
-
-const CONCEPTS = ["EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", "SUEÑO MECÁNICO", "SOMBRAS DE NEÓN"];
+const CONCEPTS = ["EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", "SUEÑO MECÁNICO"];
 
 // --- HELPERS ---
-const getSyllablesCount = (w) => {
-  const clean = String(w || "").toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
-  if (!clean) return 0;
-  const matches = clean.match(/[aeiouáéíóúü]{1,2}/g);
-  return matches ? matches.length : 1;
-};
-
-const countTotalSyllablesFromRaw = (text) => {
+const getSyllablesCount = (text) => {
   if (!text) return 0;
-  const cleanText = String(text).replace(/<[^>]*>/g, '').toLowerCase().trim();
-  const words = cleanText.split(/\s+/).filter(w => w.length > 0);
-  return words.reduce((acc, w) => acc + getSyllablesCount(w), 0);
+  const clean = String(text).toLowerCase().replace(/[^a-záéíóúüñ\s]/g, '');
+  const words = clean.split(/\s+/).filter(w => w.length > 0);
+  return words.reduce((acc, w) => {
+    const matches = w.match(/[aeiouáéíóúü]{1,2}/g);
+    return acc + (matches ? matches.length : 1);
+  }, 0);
 };
 
-// --- COMPONENTE BUBBLE (MEMOIZADO) ---
-const EditableBubble = memo(({ content, side, fontSize }) => {
+// --- COMPONENTE BUBBLE ---
+const EditableBubble = memo(({ content, isMe, fontSize }) => {
   return (
-    <div 
-      className={`p-5 border-l-4 ${side === 'left' ? 'border-cyan-500 bg-white' : 'border-r-4 border-l-0 border-rose-500 bg-white text-right'} text-slate-900 rounded-lg font-semibold italic shadow-2xl transition-all lead-relaxed`}
-      style={{ fontSize: `${fontSize}px` }}
-      dangerouslySetInnerHTML={{ __html: content }}
-    />
+    <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div 
+        className={`max-w-[85%] p-4 rounded-2xl text-lg font-bold leading-relaxed shadow-xl
+          ${isMe 
+            ? 'bg-cyan-500 text-black rounded-tr-none' 
+            : 'bg-white/10 text-white rounded-tl-none border border-white/10'
+          }`}
+        style={{ fontSize: `${fontSize}px` }}
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    </div>
   );
 });
 
@@ -51,19 +50,14 @@ const EditableBubble = memo(({ content, side, fontSize }) => {
 // 🔥 APP PRINCIPAL (SALA DE BATALLA)
 // ==========================================
 export default function BattleRoom() {
-  // 1. HOOKS PRIMERO (SIEMPRE ARRIBA PARA EVITAR ERROR #310)
-  const { user, loading, logout } = useUserAuth(); 
+  const { user, loading } = useUserAuth(); 
   const params = useParams();
   const roomId = params?.id;    
   const router = useRouter();
   
-  const [battleRows, setBattleRows] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [currentTheme, setCurrentTheme] = useState("");
-  const [intensity, setIntensity] = useState(0); 
-  const [p1Name, setP1Name] = useState("JUGADOR 1");
-  const [p2Name, setP2Name] = useState("RIVAL");
-  const [activeSide, setActiveSide] = useState('left');
-  const [fontSize, setFontSize] = useState(15);
+  const [fontSize, setFontSize] = useState(16);
   const [syllableCount, setSyllableCount] = useState(0);
   const [isBeatPlaying, setIsBeatPlaying] = useState(false);
   const [beatUrl, setBeatUrl] = useState(""); 
@@ -79,47 +73,22 @@ export default function BattleRoom() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef("");
 
-  // 2. EFECTO PARA NOMBRE DE USUARIO
-  useEffect(() => {
-    if (user?.displayName) {
-      setP1Name(user.displayName.toUpperCase());
-    }
-  }, [user]);
-
-  // 3. ESCUCHA DE MENSAJES (FIREBASE)
+  // 1. ESCUCHA DE MENSAJES (FIREBASE)
   useEffect(() => {
     if (!roomId) return;
-
-    const q = query(
-      collection(db, "rooms", roomId, "messages"),
-      orderBy("sentAt", "asc")
-    );
-
+    const q = query(collection(db, "rooms", roomId, "messages"), orderBy("sentAt", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      const rows = [];
-      messages.forEach((msg) => {
-        if (msg.side === 'left') {
-          rows.push({ id: msg.id, left: msg, right: null });
-        } else {
-          if (rows.length > 0 && !rows[rows.length - 1].right) {
-            rows[rows.length - 1].right = msg;
-          } else {
-            rows.push({ id: msg.id, left: null, right: msg });
-          }
-        }
-      });
-      setBattleRows(rows);
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMessages(msgs);
+      // Auto-scroll al fondo
+      setTimeout(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
     });
-
     return () => unsubscribe();
   }, [roomId]);
 
-  // 4. MOTOR FONÉTICO
+  // 2. LOGICA DE RIMA Y COLORES
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -128,16 +97,10 @@ export default function BattleRoom() {
     let vPos = [];
     for (let i = 0; i < clean.length; i++) if (vowels.includes(clean[i])) vPos.push(i);
     if (vPos.length === 0) return null;
-    let stressIdx = -1;
-    if (clean.match(/[áéíóú]/)) stressIdx = clean.search(/[áéíóú]/);
-    else {
-      const lastChar = clean.slice(-1);
-      if ("aeiouns".includes(lastChar)) stressIdx = vPos.length > 1 ? vPos[vPos.length - 2] : vPos[0];
-      else stressIdx = vPos[vPos.length - 1];
-    }
+    let stressIdx = clean.length - 2; // Simplificado para rendimiento
     let sig = "";
-    for (let i = stressIdx; i < clean.length; i++) if (vowels.includes(clean[i])) sig += normalize(clean[i]);
-    return (stressIdx === vPos[vPos.length - 1] ? "A-" : "G-") + sig;
+    for (let i = Math.max(0, stressIdx); i < clean.length; i++) if (vowels.includes(clean[i])) sig += normalize(clean[i]);
+    return sig;
   }, []);
 
   const applyRhymeColors = useCallback((rawText) => {
@@ -168,7 +131,35 @@ export default function BattleRoom() {
     }).join(' ');
   }, [getVocalicSignature]);
 
-  // 5. EFECTO DE VOZ
+  // 3. ENVIAR MENSAJE (Detecta automáticamente el usuario)
+  const dropBar = async () => {
+    if (!editorRef.current || !roomId || !user) return;
+    const rawText = editorRef.current.innerText;
+    if (!rawText.trim()) return;
+
+    const processedText = isAutoColored ? applyRhymeColors(rawText) : rawText;
+    
+    const bar = { 
+      text: processedText, 
+      syllables: getSyllablesCount(rawText), 
+      sentAt: Date.now(),
+      uid: user.uid, // GUARDAMOS QUIÉN ESCRIBIÓ EL MENSAJE
+      authorName: user.displayName || "Anonimo"
+    };
+
+    try { 
+      await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
+    } catch (e) { 
+      console.error("Error al guardar:", e); 
+    }
+    
+    editorRef.current.innerText = '';
+    setSyllableCount(0);
+    accumulatedTextRef.current = "";
+    if (scrollRef.current) scrollRef.current.scrollTo(0, scrollRef.current.scrollHeight);
+  };
+
+  // 4. AUDIO Y MICROFONO
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -186,7 +177,7 @@ export default function BattleRoom() {
           const total = (accumulatedTextRef.current + interim).trim();
           if (editorRef.current) {
             editorRef.current.innerText = total;
-            setSyllableCount(countTotalSyllablesFromRaw(total));
+            setSyllableCount(getSyllablesCount(total));
           }
         };
         rec.onend = () => { if (isFooterRecording) rec.start(); };
@@ -206,150 +197,100 @@ export default function BattleRoom() {
     }
   };
 
-  const dropBar = async () => {
-    if (!editorRef.current || !roomId) return;
-    const rawText = editorRef.current.innerText;
-    if (!rawText.trim()) return;
-
-    const processedText = isAutoColored ? applyRhymeColors(rawText) : rawText;
-    const bar = { 
-      text: processedText, 
-      syllables: countTotalSyllablesFromRaw(rawText), 
-      sentAt: Date.now(),
-      side: activeSide 
-    };
-
-    try { 
-      await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
-    } catch (e) { 
-      console.error("Error al guardar:", e); 
-    }
-    
-    editorRef.current.innerText = '';
-    setSyllableCount(0);
-    accumulatedTextRef.current = "";
-    if (scrollRef.current) scrollRef.current.scrollTo(0, scrollRef.current.scrollHeight);
-  };
-
   const handleBeat = () => {
     if (!beatUrl) return setShowBeatSettings(true);
     if (isBeatPlaying) { beatAudioRef.current.pause(); setIsBeatPlaying(false); }
     else { beatAudioRef.current.play(); setIsBeatPlaying(true); }
   };
 
-  // 6. CONTROL DE SEGURIDAD
-  useEffect(() => { 
-    if (!loading && !user) router.push('/'); 
-  }, [user, loading, router]);
-  
-  useEffect(() => {
-    const total = battleRows.length * 5;
-    setIntensity(Math.min(total, 90));
-  }, [battleRows]);
-
-  // 7. RENDERIZADO CONDICIONAL AL FINAL
-  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-black animate-pulse">CARGANDO SALA...</div>;
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-400 font-black animate-pulse">CARGANDO...</div>;
   if (!user) return null;
 
   return (
     <div className="h-screen bg-[#0a0a0c] text-white font-sans flex flex-col overflow-hidden relative">
       <audio ref={beatAudioRef} src={beatUrl} loop />
       
-      {/* BACKGROUND GLOW */}
-      <div className="absolute inset-0 pointer-events-none opacity-20 transition-all duration-1000" style={{ background: `radial-gradient(circle at 50% 50%, #22d3ee 0%, transparent ${intensity}%)`, filter: `blur(40px)` }} />
-
       {/* HEADER */}
-      <div className="flex-none border-b border-white/5 p-4 bg-black/90 backdrop-blur-xl z-30 grid grid-cols-[1fr_auto_1fr] items-center">
-        <div className="flex flex-col">
-          <span className="text-cyan-400 font-black tracking-widest text-sm">{p1Name}</span>
-          <button onClick={() => logout()} className="text-[8px] text-red-500 font-bold text-left hover:underline">SALIR</button>
-        </div>
+      <div className="flex-none border-b border-white/5 p-4 bg-black/90 backdrop-blur-xl z-30 flex justify-between items-center">
+        <Link href="/" className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all"><ArrowLeft size={20}/></Link>
         <div className="flex items-center gap-2">
-          <Zap size={30} className="text-yellow-400 fill-yellow-400" />
-          <h1 className="font-black italic text-2xl tracking-tighter">RIMAS <span className="text-cyan-400">MVP</span></h1>
+          <Zap size={24} className="text-yellow-400 fill-yellow-400" />
+          <h1 className="font-black italic text-xl tracking-tighter">SALA <span className="text-cyan-400">PVP</span></h1>
         </div>
-        <div className="flex flex-col text-right">
-           <input value={p2Name} onChange={e => setP2Name(e.target.value.toUpperCase())} className="bg-transparent text-right font-black text-red-600 outline-none uppercase" />
-           <span className="text-[8px] text-white/40 font-bold uppercase">SALA: {roomId}</span>
-        </div>
+        <div className="w-10"></div> {/* Espaciador para centrar */}
       </div>
 
       {/* TEMA ACTUAL */}
       {currentTheme && (
-        <div className="flex-none bg-cyan-950/30 border-b border-white/5 py-1 text-center">
-          <span className="text-[9px] font-black tracking-[0.3em] text-white/60 italic">CONCEPTO: {currentTheme}</span>
+        <div className="flex-none bg-cyan-950/30 border-b border-white/5 py-1 text-center animate-in slide-in-from-top">
+          <span className="text-[10px] font-black tracking-[0.3em] text-white/60 italic">CONCEPTO: {currentTheme}</span>
         </div>
       )}
 
       {/* ÁREA DE BATALLA */}
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar flex flex-col" ref={scrollRef}>
-        <div className="max-w-4xl w-full mx-auto flex flex-col gap-12 pb-40">
-          {battleRows.map((row, idx) => (
-            <div key={row.id} className="flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4">
-              <div className="flex-1">{row.left && <EditableBubble content={row.left.text} side="left" fontSize={fontSize} />}</div>
-              <div className="text-[9px] font-black text-white/10 italic">V{idx + 1}</div>
-              <div className="flex-1">{row.right && <EditableBubble content={row.right.text} side="right" fontSize={fontSize} />}</div>
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2" ref={scrollRef}>
+        {messages.map((msg) => {
+          // AQUÍ SE DECIDE EL LADO AUTOMÁTICAMENTE
+          const isMe = msg.uid === user.uid; 
+          return (
+            <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2`}>
+              <span className="text-[9px] font-black text-white/30 mb-1 px-1 uppercase">{msg.authorName || 'Rival'}</span>
+              <EditableBubble content={msg.text} isMe={isMe} fontSize={fontSize} />
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* CONTROLES FLOTANTES IZQUIERDA */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-20">
-        <button onClick={() => setCurrentTheme(CONCEPTS[Math.floor(Math.random()*CONCEPTS.length)])} className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-yellow-400 hover:bg-white/10 transition-all"><Sparkle size={20}/></button>
-        <button onClick={() => setShowBeatSettings(true)} className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-cyan-400 hover:bg-white/10 transition-all"><Disc size={20}/></button>
+      {/* CONTROLES FLOTANTES */}
+      <div className="absolute left-4 top-20 flex flex-col gap-4 z-20">
+        <button onClick={() => setCurrentTheme(CONCEPTS[Math.floor(Math.random()*CONCEPTS.length)])} className="w-10 h-10 bg-black/50 border border-white/10 rounded-full flex items-center justify-center text-yellow-400 backdrop-blur-md hover:bg-white/10"><Sparkle size={20}/></button>
+        <button onClick={() => setShowBeatSettings(true)} className="w-10 h-10 bg-black/50 border border-white/10 rounded-full flex items-center justify-center text-cyan-400 backdrop-blur-md hover:bg-white/10"><Disc size={20}/></button>
       </div>
 
       {/* FOOTER INPUT */}
-      <div className="flex-none p-4 bg-black border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-40">
+      <div className="flex-none p-4 bg-black border-t border-white/10 shadow-2xl z-40">
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
           <div className="flex justify-between items-center px-1">
-            <div className="flex gap-2">
-              <button onClick={() => setActiveSide('left')} className={`px-5 py-1.5 rounded-full text-[10px] font-black transition-all ${activeSide === 'left' ? 'bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)]' : 'bg-white/5 text-white/40'}`}>YO</button>
-              <button onClick={() => setActiveSide('right')} className={`px-5 py-1.5 rounded-full text-[10px] font-black transition-all ${activeSide === 'right' ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-white/5 text-white/40'}`}>RIVAL</button>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setIsAutoColored(!isAutoColored)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${isAutoColored ? 'border-yellow-400 text-yellow-400 bg-yellow-400/10' : 'border-white/10 text-white/40'}`}><Sparkles size={12}/> AUTO-COLOR</button>
-              <button onClick={handleBeat} className={`px-4 py-1.5 rounded-full text-[10px] font-black border transition-all ${isBeatPlaying ? 'border-cyan-400 text-cyan-400 animate-pulse' : 'border-white/10 text-white/40'}`}>{isBeatPlaying ? 'STOP BEAT' : 'PLAY BEAT'}</button>
-            </div>
+             {/* INDICADOR DE USUARIO */}
+             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+               Rapeando como: {user.displayName}
+             </span>
+             <div className="flex gap-2">
+                <button onClick={() => setIsAutoColored(!isAutoColored)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black border transition-all ${isAutoColored ? 'border-yellow-400 text-yellow-400' : 'border-white/10 text-white/40'}`}><Sparkles size={10}/> COLOR</button>
+                <button onClick={handleBeat} className={`px-3 py-1 rounded-full text-[10px] font-black border transition-all ${isBeatPlaying ? 'border-cyan-400 text-cyan-400' : 'border-white/10 text-white/40'}`}>{isBeatPlaying ? 'PAUSE' : 'PLAY'}</button>
+             </div>
           </div>
 
           <div className="flex gap-2">
-            <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl flex items-center px-5 min-h-[60px] focus-within:border-cyan-500/50 transition-all">
+            <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl flex items-center px-4 min-h-[50px] focus-within:border-cyan-500/50 transition-all">
               <div 
                 ref={editorRef} 
                 contentEditable 
-                onInput={(e) => setSyllableCount(countTotalSyllablesFromRaw(e.currentTarget.innerText))}
+                onInput={(e) => setSyllableCount(getSyllablesCount(e.currentTarget.innerText))}
                 onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dropBar(); } }}
-                className="flex-1 outline-none font-bold text-lg text-white py-3"
-                data-placeholder="Escribe o usa el mic..."
+                className="flex-1 outline-none font-bold text-white py-2"
+                data-placeholder="Escupe tu rima..."
               />
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <span className="text-[10px] font-black text-white/20 tabular-nums">{syllableCount} SIL</span>
-                <button 
-                  onClick={toggleMic} 
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isFooterRecording ? 'bg-red-600 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
-                >
-                  {isFooterRecording ? <Square size={18} fill="white" /> : <Mic size={18} />}
+                <button onClick={toggleMic} className={`p-2 rounded-full transition-all ${isFooterRecording ? 'bg-red-500 text-white animate-pulse' : 'text-white/40 hover:text-white'}`}>
+                  {isFooterRecording ? <Square size={16} fill="white" /> : <Mic size={18} />}
                 </button>
               </div>
             </div>
-            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 rounded-2xl font-black text-xs transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.3)]">ENVIAR</button>
+            <button onClick={dropBar} className="bg-cyan-500 hover:bg-cyan-400 text-black px-6 rounded-2xl font-black text-xs transition-all active:scale-95">ENVIAR</button>
           </div>
         </div>
       </div>
 
-      {/* BEAT SETTINGS MODAL */}
+      {/* MODAL BEAT */}
       {showBeatSettings && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-6">
-          <div className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-sm flex flex-col gap-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex justify-between items-center">
-              <h2 className="text-cyan-400 font-black text-sm tracking-widest">BEAT ENGINE</h2>
-              <button onClick={() => setShowBeatSettings(false)}><X size={20}/></button>
-            </div>
-            <button onClick={() => fileInputRef.current.click()} className="w-full bg-cyan-600 hover:bg-cyan-500 py-4 rounded-xl font-black text-xs flex items-center justify-center gap-3 transition-all"><Upload size={18}/> SUBIR MP3 DESDE PC/CEL</button>
+          <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-xs relative">
+            <button onClick={() => setShowBeatSettings(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><X size={20}/></button>
+            <h2 className="text-cyan-400 font-black text-sm mb-4">SUBIR BEAT (MP3)</h2>
+            <button onClick={() => fileInputRef.current.click()} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2"><Upload size={16}/> SELECCIONAR ARCHIVO</button>
             <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files[0]; if(f) { setBeatUrl(URL.createObjectURL(f)); setShowBeatSettings(false); } }} className="hidden" accept="audio/*" />
-            <p className="text-[10px] text-white/30 text-center italic">Sube cualquier pista para empezar la batalla</p>
           </div>
         </div>
       )}
