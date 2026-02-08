@@ -3,36 +3,38 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useUserAuth } from '../../../context/AuthContext'; 
 import { useParams, useRouter } from 'next/navigation';
-import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle, ArrowLeft, Send, Palette } from 'lucide-react';
+import { Zap, X, Upload, Mic, Square, Sparkles, Disc, Sparkle, ArrowLeft, Send, Palette, Play, Pause, Pencil, Check } from 'lucide-react';
 import { db } from '../../../lib/firebase'; 
-import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import Link from 'next/link';
 
 // --- CONSTANTES ---
 const INITIAL_STOPWORDS = ['el', 'la', 'los', 'las', 'un', 'una', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'con', 'en', 'por', 'para', 'que', 'es', 'son', 'si', 'no', 'tu', 'su', 'mi', 'yo', 'me'];
 
-// PALETA DE COLORES MANUAL
+// PALETA MANUAL
 const MANUAL_COLORS = [
-  { id: 'cyan', hex: '#00bcd4' },
-  { id: 'magenta', hex: '#d500f9' },
-  { id: 'blue', hex: '#2962ff' },
-  { id: 'green', hex: '#00c853' },
-  { id: 'yellow', hex: '#ffeb3b' },
-  { id: 'red', hex: '#d50000' }
+  { id: 'cyan', hex: '#00e5ff' },
+  { id: 'magenta', hex: '#ff4081' },
+  { id: 'lime', hex: '#76ff03' },
+  { id: 'yellow', hex: '#ffea00' },
+  { id: 'orange', hex: '#ff9100' },
+  { id: 'red', hex: '#ff1744' }
 ];
 
-const COLORS = [
-  { id: 'red', hex: '#D50000' },
-  { id: 'blue', hex: '#0040FF' },
-  { id: 'green', hex: '#00C853' },
-  { id: 'purple', hex: '#AA00FF' },
-  { id: 'orange', hex: '#FF6D00' }
+// COLORES AUTOMÁTICOS (High Contrast para texto)
+const AUTO_COLORS = [
+  { hex: '#ff1744' }, // Rojo Neón
+  { hex: '#00e5ff' }, // Cyan Neón
+  { hex: '#76ff03' }, // Verde Lima
+  { hex: '#ea80fc' }, // Violeta
+  { hex: '#ffea00' }  // Amarillo
 ];
 
 const CONCEPTS = ["EL ESPEJO DEL TIEMPO", "LABERINTO DE CRISTAL", "EL PESO DEL SILENCIO", "RAÍCES DE METAL", "OCÉANO DE CENIZA", "SUEÑO MECÁNICO"];
 
 // --- HELPERS ---
 const stripHtml = (html) => {
+   if (typeof window === 'undefined') return html;
    let tmp = document.createElement("DIV");
    tmp.innerHTML = html;
    return tmp.textContent || tmp.innerText || "";
@@ -40,7 +42,6 @@ const stripHtml = (html) => {
 
 const getSyllablesCount = (text) => {
   if (!text) return 0;
-  // Limpiamos etiquetas HTML para contar sílabas reales
   const cleanContent = text.includes('<') ? stripHtml(text) : text;
   const clean = String(cleanContent).toLowerCase().replace(/[^a-záéíóúüñ\s]/g, '');
   const words = clean.split(/\s+/).filter(w => w.length > 0);
@@ -50,23 +51,101 @@ const getSyllablesCount = (text) => {
   }, 0);
 };
 
-// --- COMPONENTE BUBBLE ---
-const EditableBubble = memo(({ content, isMe, authorName, fontSize }) => {
+// --- COMPONENTE AUDIO PLAYER ---
+const AudioPlayer = ({ base64Audio }) => {
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef(null);
+
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setPlaying(!playing);
+  };
+
+  return (
+    <div className="flex items-center gap-2 mt-2 bg-black/20 p-1.5 rounded-lg w-fit">
+      <audio 
+        ref={audioRef} 
+        src={base64Audio} 
+        onEnded={() => setPlaying(false)} 
+        className="hidden" 
+      />
+      <button onClick={toggle} className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-white">
+        {playing ? <Pause size={12}/> : <Play size={12}/>}
+      </button>
+      <div className="h-1 w-12 bg-white/20 rounded-full overflow-hidden">
+        <div className={`h-full bg-cyan-400 ${playing ? 'animate-[width_2s_linear_infinite]' : 'w-0'}`}></div>
+      </div>
+      <span className="text-[9px] font-bold opacity-70">VOZ</span>
+    </div>
+  );
+};
+
+// --- COMPONENTE BUBBLE (EDITABLE Y VISUAL) ---
+const MessageBubble = memo(({ msg, isMe, roomId }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const editRef = useRef(null);
+
+  const saveEdit = async () => {
+    if (!editRef.current) return;
+    const newContent = editRef.current.innerHTML;
+    try {
+      const msgRef = doc(db, "rooms", roomId, "messages", msg.id);
+      await updateDoc(msgRef, { text: newContent });
+      setIsEditing(false);
+    } catch (e) {
+      console.error("Error al editar:", e);
+    }
+  };
+
   return (
     <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 animate-in fade-in slide-in-from-bottom-2`}>
-      <div className={`flex flex-col max-w-[85%] ${isMe ? 'items-end' : 'items-start'}`}>
-        <span className="text-[10px] font-bold text-white/50 mb-1 px-1 uppercase tracking-wider">
-          {isMe ? 'Tú' : authorName}
-        </span>
+      <div className={`flex flex-col max-w-[90%] ${isMe ? 'items-end' : 'items-start'}`}>
+        
+        {/* Header Burbuja */}
+        <div className="flex items-center gap-2 mb-1 px-1">
+          <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
+            {isMe ? 'Tú' : msg.authorName}
+          </span>
+          {isMe && !isEditing && (
+            <button onClick={() => setIsEditing(true)} className="text-white/20 hover:text-cyan-400">
+              <Pencil size={10} />
+            </button>
+          )}
+        </div>
+        
+        {/* Cuerpo Burbuja */}
         <div 
-          className={`px-5 py-3 rounded-2xl text-base md:text-lg font-bold leading-snug shadow-lg break-words text-black
+          className={`px-4 py-3 rounded-2xl text-base font-medium shadow-lg break-words
             ${isMe 
-              ? 'bg-cyan-400 rounded-tr-none border-2 border-cyan-500' 
-              : 'bg-white rounded-tl-none border-2 border-gray-300'
+              ? 'bg-cyan-900/40 border border-cyan-500/50 text-cyan-50 rounded-tr-none' 
+              : 'bg-white text-gray-900 rounded-tl-none border-2 border-gray-300 font-semibold'
             }`}
-          style={{ fontSize: `${fontSize}px` }}
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
+        >
+          {isEditing ? (
+            <div className="flex flex-col gap-2 min-w-[200px]">
+              <div 
+                ref={editRef}
+                contentEditable
+                className="outline-none bg-black/20 p-2 rounded text-white"
+                dangerouslySetInnerHTML={{ __html: msg.text }}
+              />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setIsEditing(false)}><X size={14} className="text-red-400"/></button>
+                <button onClick={saveEdit}><Check size={14} className="text-green-400"/></button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div dangerouslySetInnerHTML={{ __html: msg.text }} />
+              {msg.audio && <AudioPlayer base64Audio={msg.audio} />}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -87,15 +166,20 @@ export default function BattleRoom() {
   const [isBeatPlaying, setIsBeatPlaying] = useState(false);
   const [beatUrl, setBeatUrl] = useState(""); 
   const [showBeatSettings, setShowBeatSettings] = useState(false);
-  const [isFooterRecording, setIsFooterRecording] = useState(false);
   
+  // ESTADO AUDIO GRABACIÓN
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const [audioBase64, setAudioBase64] = useState(null);
+
   // REFS
   const beatAudioRef = useRef(null);
   const fileInputRef = useRef(null);
   const editorRef = useRef(null);
   const scrollRef = useRef(null);
   const recognitionRef = useRef(null);
-  const accumulatedTextRef = useRef("");
+  const lastTranscriptRef = useRef(""); // Para evitar duplicados en speech
 
   // 1. ESCUCHA DE MENSAJES
   useEffect(() => {
@@ -111,7 +195,7 @@ export default function BattleRoom() {
     return () => unsubscribe();
   }, [roomId]);
 
-  // 2. LOGICA DE RIMA Y AUTO-COLOREADO
+  // 2. LÓGICA DE RIMA Y FORMATO
   const getVocalicSignature = useCallback((word) => {
     if (!word || String(word).length < 2) return null;
     let clean = String(word).toLowerCase().trim().replace(/[^a-záéíóúüñ]/g, '');
@@ -126,15 +210,34 @@ export default function BattleRoom() {
     return sig;
   }, []);
 
+  const autoFormatVerses = (text) => {
+    // Inserta <br> cada 14 sílabas aprox si es prosa larga
+    const words = text.split(' ');
+    let lineSyllables = 0;
+    let newText = "";
+    
+    words.forEach(word => {
+        const syl = getSyllablesCount(word);
+        if (lineSyllables + syl > 14) {
+            newText += "<br>" + word + " ";
+            lineSyllables = syl;
+        } else {
+            newText += word + " ";
+            lineSyllables += syl;
+        }
+    });
+    return newText;
+  };
+
   const applyAutoColors = () => {
     if (!editorRef.current) return;
-    const rawText = editorRef.current.innerText; // Tomamos texto limpio para analizar
+    const rawText = editorRef.current.innerText; 
     if (!rawText) return;
 
+    // 1. Detección de rimas
     const words = rawText.split(/([\s,.;:!?]+)/);
     const sigMap = {};
 
-    // Detección
     words.forEach(w => {
       const trimmed = w.trim();
       if (!trimmed) return;
@@ -148,27 +251,45 @@ export default function BattleRoom() {
     let cIdx = 0;
     Object.keys(sigMap).forEach(sig => {
       if (sigMap[sig] > 1) { 
-        activeColors[sig] = COLORS[cIdx % COLORS.length];
+        activeColors[sig] = AUTO_COLORS[cIdx % AUTO_COLORS.length];
         cIdx++;
       }
     });
 
-    // Reconstrucción HTML
+    // 2. Reconstrucción con <br> automáticos (VERSOS)
+    let currentLineSyllables = 0;
     const newHTML = words.map(word => {
       const trimmed = word.trim();
+      // Si es separador, devolverlo tal cual
       if (!trimmed) return word;
+
+      const syl = getSyllablesCount(trimmed);
       const sig = getVocalicSignature(trimmed);
       const color = activeColors[sig];
+      
+      let styledWord = word;
+      
+      // Aplicar color al TEXTO (no background)
       if (color && !INITIAL_STOPWORDS.includes(trimmed.toLowerCase())) {
-        return `<span style="color: ${color.hex}; font-weight: 900; text-shadow: 1px 1px 0px rgba(0,0,0,0.1);">${word}</span>`;
+        styledWord = `<span style="color: ${color.hex}; font-weight: 800; text-shadow: 0 0 1px rgba(0,0,0,0.2);">${word}</span>`;
       }
-      return word;
+      
+      // Lógica de salto de línea automática
+      if (currentLineSyllables + syl > 15) {
+         styledWord = "<br>" + styledWord;
+         currentLineSyllables = syl;
+      } else {
+         currentLineSyllables += syl;
+      }
+
+      return styledWord;
     }).join('');
 
-    // Aplicamos al editor
     editorRef.current.innerHTML = newHTML;
-    
-    // Mover cursor al final (Truco necesario en contentEditable)
+    moveCursorToEnd();
+  };
+
+  const moveCursorToEnd = () => {
     const range = document.createRange();
     const sel = window.getSelection();
     range.selectNodeContents(editorRef.current);
@@ -177,81 +298,141 @@ export default function BattleRoom() {
     sel.addRange(range);
   };
 
-  // 3. COLOREADO MANUAL
   const applyManualColor = (hex) => {
     document.execCommand('styleWithCSS', false, true);
     document.execCommand('foreColor', false, hex);
-    // Aseguramos negrita para que se vea bien
     document.execCommand('bold', false, null);
     editorRef.current.focus();
   };
 
-  // 4. ENVIAR MENSAJE
-  const dropBar = async () => {
-    if (!editorRef.current || !roomId || !user) return;
-    
-    // IMPORTANTE: Enviamos innerHTML para mantener los colores manuales y automáticos
-    const finalContent = editorRef.current.innerHTML; 
-    const plainText = editorRef.current.innerText;
-    
-    if (!plainText.trim()) return;
+  // 3. AUDIO Y GRABACIÓN (FIXED)
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Iniciar MediaRecorder (Audio Blob)
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+           setAudioBase64(reader.result); // Guardar base64 para enviar
+        };
+        stream.getTracks().forEach(track => track.stop()); // Apagar mic hardware
+      };
 
-    const bar = { 
-      text: finalContent, 
-      syllables: getSyllablesCount(plainText), 
-      sentAt: Date.now(),
-      uid: user.uid, 
-      authorName: user.displayName || "Anonimo"
-    };
+      mediaRecorder.start();
+      
+      // Iniciar SpeechRecognition (Texto)
+      if (recognitionRef.current) {
+        lastTranscriptRef.current = ""; // Resetear memoria
+        recognitionRef.current.start();
+      }
+      
+      setIsRecording(true);
 
-    try { 
-      await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
-    } catch (e) { 
-      console.error(e); 
+    } catch (err) {
+      console.error("Error al acceder al microfono:", err);
+      alert("No se pudo acceder al micrófono. Verifica los permisos.");
     }
-    
-    editorRef.current.innerHTML = '';
-    setSyllableCount(0);
-    accumulatedTextRef.current = "";
-    if (scrollRef.current) scrollRef.current.scrollTo(0, scrollRef.current.scrollHeight);
   };
 
-  // AUDIO & MIC
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
+    if (recognitionRef.current) recognitionRef.current.stop();
+    setIsRecording(false);
+    // Aplicar formato auto al terminar de hablar
+    setTimeout(() => applyAutoColors(), 500);
+  };
+
+  // CONFIGURACIÓN INICIAL SPEECH
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SR && !recognitionRef.current) {
+      if (SR) {
         const rec = new SR();
         rec.lang = 'es-ES';
         rec.continuous = true;
-        rec.interimResults = true;
+        rec.interimResults = true; // Necesario para feedback real
+        
         rec.onresult = (e) => {
-          let interim = '';
-          for (let i = e.resultIndex; i < e.results.length; ++i) {
-            if (e.results[i].isFinal) accumulatedTextRef.current += e.results[i][0].transcript + ' ';
-            else interim += e.results[i][0].transcript;
-          }
-          const total = (accumulatedTextRef.current + interim).trim();
-          if (editorRef.current) {
-            editorRef.current.innerText = total;
-            setSyllableCount(getSyllablesCount(total));
-          }
+            let interim = '';
+            let final = '';
+            
+            // Solución al problema de repetición:
+            // Solo procesamos lo nuevo respecto al último resultado final
+            for (let i = e.resultIndex; i < e.results.length; ++i) {
+                if (e.results[i].isFinal) {
+                    final += e.results[i][0].transcript;
+                } else {
+                    interim += e.results[i][0].transcript;
+                }
+            }
+
+            if (editorRef.current) {
+               // Evitamos sobrescribir todo el HTML si solo estamos dictando
+               // Estrategia simple: Insertar texto al final
+               // Para una implementación perfecta necesitaríamos un cursor inteligente, 
+               // pero para evitar bugs, añadimos el texto limpio.
+               
+               // NOTA: Para este fix rápido, asumimos que si dictas, estás añadiendo.
+               const currentHTML = editorRef.current.innerHTML;
+               if (final) {
+                 // Añadimos solo lo final
+                 editorRef.current.innerHTML = currentHTML + " " + final;
+                 lastTranscriptRef.current = final; // Guardamos
+               }
+               // El interim lo podríamos mostrar en un floating div, pero simplificamos
+            }
+            
+            // Actualizar contador
+            if(editorRef.current) setSyllableCount(getSyllablesCount(editorRef.current.innerText));
         };
-        rec.onend = () => { if (isFooterRecording) rec.start(); };
         recognitionRef.current = rec;
       }
     }
-  }, [isFooterRecording]);
+  }, []);
 
-  const toggleMic = () => {
-    if (isFooterRecording) {
-      recognitionRef.current?.stop();
-      setIsFooterRecording(false);
-    } else {
-      accumulatedTextRef.current = editorRef.current?.innerText || "";
-      recognitionRef.current?.start();
-      setIsFooterRecording(true);
-    }
+  // 4. ENVIAR
+  const dropBar = async () => {
+    if (!editorRef.current || !roomId || !user) return;
+    
+    // Ejecutar autocolor una última vez por si acaso
+    applyAutoColors();
+    
+    // Pequeño delay para asegurar que el DOM se actualizó
+    setTimeout(async () => {
+        const finalContent = editorRef.current.innerHTML; 
+        const plainText = editorRef.current.innerText;
+        
+        if (!plainText.trim() && !audioBase64) return;
+    
+        const bar = { 
+          text: finalContent, 
+          syllables: getSyllablesCount(plainText), 
+          sentAt: Date.now(),
+          uid: user.uid, 
+          authorName: user.displayName || "Anonimo",
+          audio: audioBase64 || null // Adjuntar audio si existe
+        };
+    
+        try { 
+          await addDoc(collection(db, "rooms", roomId, "messages"), bar); 
+        } catch (e) { console.error(e); }
+        
+        editorRef.current.innerHTML = '';
+        setSyllableCount(0);
+        setAudioBase64(null); // Limpiar audio
+        if (scrollRef.current) scrollRef.current.scrollTo(0, scrollRef.current.scrollHeight);
+    }, 100);
   };
 
   const handleBeat = () => {
@@ -278,7 +459,7 @@ export default function BattleRoom() {
         <div className="w-16"></div> 
       </div>
 
-      {/* HERRAMIENTAS SUPERIORES */}
+      {/* HERRAMIENTAS */}
       <div className="flex-none bg-[#111] border-b border-white/5 p-2 flex justify-around items-center z-20">
          <button onClick={() => setCurrentTheme(CONCEPTS[Math.floor(Math.random()*CONCEPTS.length)])} className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5 active:scale-95">
             <Sparkle size={14} className="text-yellow-400"/>
@@ -302,59 +483,70 @@ export default function BattleRoom() {
       {/* CHAT AREA */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2 bg-[#0a0a0c]" ref={scrollRef}>
         {messages.map((msg) => (
-             <EditableBubble 
+             <MessageBubble 
                 key={msg.id} 
-                content={msg.text} 
+                msg={msg} 
                 isMe={user && msg.uid === user.uid} 
-                authorName={msg.authorName} 
-                fontSize={fontSize} 
+                roomId={roomId}
              />
         ))}
         <div className="h-4 w-full"></div>
       </div>
 
-      {/* AREA DE EDICIÓN Y PALETA */}
+      {/* EDITOR AREA */}
       <div className="flex-none bg-[#050505] border-t border-white/10 pb-safe z-40">
         
-        {/* BARRA DE COLORES MANUALES (PALETA) */}
+        {/* PALETA DE COLORES (Arreglado punto 1: Colores de texto, no fondo) */}
         <div className="flex items-center justify-between px-4 py-2 bg-[#111] border-b border-white/5 overflow-x-auto gap-2">
            <div className="flex items-center gap-3">
              <span className="text-[9px] font-bold text-white/30 mr-1"><Palette size={12}/></span>
              {MANUAL_COLORS.map((col) => (
                <button 
                  key={col.id}
-                 onMouseDown={(e) => { e.preventDefault(); applyManualColor(col.hex); }} // onMouseDown evita perder foco
+                 onMouseDown={(e) => { e.preventDefault(); applyManualColor(col.hex); }}
                  className="w-6 h-6 rounded-full border border-white/10 shadow-sm active:scale-90 transition-transform"
                  style={{ backgroundColor: col.hex }}
                />
              ))}
            </div>
            
-           {/* BOTÓN MÁGICO AUTO-COLOR */}
            <button 
               onMouseDown={(e) => { e.preventDefault(); applyAutoColors(); }}
-              className="px-3 py-1 bg-gradient-to-r from-yellow-600 to-yellow-400 rounded-full text-[9px] font-black text-black flex items-center gap-1 shadow-lg active:scale-95"
+              className="px-3 py-1 bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full text-[9px] font-black text-black flex items-center gap-1 shadow-lg active:scale-95"
            >
              <Sparkles size={10} fill="black"/> AUTO-RIMA
            </button>
         </div>
 
-        {/* INPUT DE TEXTO */}
+        {/* INPUT */}
         <div className="p-3">
           <div className="flex items-end gap-2 max-w-4xl mx-auto">
-            <div className="flex-1 bg-[#1a1a1c] rounded-3xl flex items-center min-h-[48px] max-h-[120px] border border-white/10 focus-within:border-cyan-500 transition-all overflow-hidden relative">
+            <div className="flex-1 bg-[#1a1a1c] rounded-3xl flex items-center min-h-[48px] max-h-[150px] border border-white/10 focus-within:border-cyan-500 transition-all overflow-hidden relative">
                <div 
                   ref={editorRef} 
                   contentEditable 
                   onInput={(e) => setSyllableCount(getSyllablesCount(e.currentTarget.innerText))}
                   onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dropBar(); } }}
-                  className="flex-1 px-4 py-3 outline-none font-bold text-white text-base max-h-[100px] overflow-y-auto"
+                  className="flex-1 px-4 py-3 outline-none font-bold text-white text-base max-h-[140px] overflow-y-auto"
                   data-placeholder="Di lo que tu alma dicta..."
                 />
                 <div className="flex items-center gap-2 pr-3">
+                   {/* Indicador de Audio Grabado */}
+                   {audioBase64 && (
+                      <span className="text-[9px] font-black text-green-400 bg-green-900/30 px-2 py-1 rounded animate-pulse">AUDIO LISTO</span>
+                   )}
+                   
                    {syllableCount > 0 && <span className="text-[10px] font-black text-white/30 tabular-nums">{syllableCount}</span>}
-                   <button onClick={toggleMic} className={`p-2 rounded-full ${isFooterRecording ? 'text-red-500 animate-pulse' : 'text-white/40 hover:text-white'}`}>
-                     {isFooterRecording ? <Square size={16} fill="white" /> : <Mic size={20} />}
+                   
+                   {/* BOTON MIC (Graba y Transcribe a la vez) */}
+                   <button 
+                     onMouseDown={startRecording}
+                     onMouseUp={stopRecording}
+                     onTouchStart={startRecording}
+                     onTouchEnd={stopRecording}
+                     className={`p-2 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white shadow-[0_0_15px_red]' : 'text-white/40 hover:text-white'}`}
+                   >
+                     {isRecording ? <Square size={16} fill="white" /> : <Mic size={20} />}
                    </button>
                 </div>
             </div>
@@ -362,6 +554,7 @@ export default function BattleRoom() {
               <Send size={20} fill="black" className="ml-0.5" />
             </button>
           </div>
+          {isRecording && <p className="text-center text-[9px] text-red-500 mt-1 animate-pulse font-bold">GRABANDO AUDIO + VOZ...</p>}
         </div>
       </div>
 
@@ -375,6 +568,7 @@ export default function BattleRoom() {
               <Upload size={18}/> SELECCIONAR MP3
             </button>
             <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files[0]; if(f) { setBeatUrl(URL.createObjectURL(f)); setShowBeatSettings(false); } }} className="hidden" accept="audio/*" />
+            <p className="text-[10px] text-white/30 mt-4 text-center">Nota: En algunos iPhone, el audio se pausará al grabar voz.</p>
           </div>
         </div>
       )}
